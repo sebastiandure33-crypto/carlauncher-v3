@@ -1,0 +1,236 @@
+CAR LAUNCHER 3 – versión 3.0-etapa5 (Kotlin + Jetpack Compose)
+================================================================
+
+Launcher (pantalla de inicio) para la radio Android del auto: velocidad y viaje por GPS,
+clima, mantenimiento por km del tablero con visor holográfico, música, mapa, accesos a apps
+y ajustes. Diseño minimalista oscuro/claro pensado para una pantalla de 7" (1024x600).
+
+Este archivo sirve para quien compile y pruebe. Al final hay una sección para el asistente
+(Claude u otro) que ayude a compilar, corregir y guiar las pruebas.
+
+
+1. LA RADIO
+-----------
+- Android 10 real (aunque diga "Android 13"), build QP1A.191105.004, plataforma T100,
+  2 GB de RAM, 32 GB, pantalla 7" ~1024x600. Tiene antena GPS (funciona sin internet).
+- Internet solo si se le comparte WiFi (hotspot del celular).
+- Si se cuelga sin imagen: botón RST (agujerito) con un clip.
+
+
+2. COMPILAR
+-----------
+Opción A – GitHub (recomendada, no hace falta Android Studio)
+  1. Crear un repositorio PRIVADO en GitHub y subir TODO el contenido de esta carpeta
+     (incluida la carpeta oculta .github).
+  2. Pestaña "Actions": arranca sola la compilación "Compilar APK" (tarda 5–10 min).
+     Si no arranca: Actions › Compilar APK › "Run workflow".
+  3. Si termina con ✅: abrir esa ejecución › abajo en "Artifacts" › CarLauncher3-apk.
+     Se baja un .zip: DESCOMPRIMIRLO en la PC. Adentro: release/app-release.apk (usar este).
+  4. Si termina con ❌: abrir la ejecución › paso "Compilar release y debug" › copiar las
+     líneas que empiezan con "e:" (errores) y pasárselas al asistente.
+
+Opción B – Android Studio
+  - Abrir la carpeta CarLauncher. Ignorar "Project update recommended" (NO actualizar AGP).
+  - Build › Select Build Variant › release. Build › Build APK(s).
+  - El APK queda en app/build/outputs/apk/release/app-release.apk
+
+Usar siempre el RELEASE (el debug es lento a propósito; sirve solo para buscar errores).
+El release ya viene firmado con la clave de prueba: se instala directo.
+
+
+3. INSTALAR EN LA RADIO
+-----------------------
+  1. Copiar app-release.apk al pendrive. En la PC: clic derecho › EXPULSAR antes de sacarlo.
+     (Si en la radio el archivo aparece con "0 bytes", la copia quedó a medias: repetir.)
+  2. En la radio, abrir el apk con el explorador de archivos e instalar.
+  3. Si dice "conflicto con un paquete existente" / "no se instaló": desinstalar antes
+     "Car Launcher 3" (pasa cuando cambia quién compila: otra PC u otro GitHub).
+     Al desinstalar se borran los datos (km, nombre, etc.).
+  - Se puede tener instalado a la vez el launcher viejo (CarLauncher13): son apps distintas.
+
+
+4. PRIMER ARRANQUE
+------------------
+  1. Abrir "Car Launcher 3" desde el cajón de apps.
+  2. Pide UBICACIÓN: "Permitir" (para GPS: velocidad, viaje, km).
+  3. En la tarjeta de música: "Permitir ver y controlar la música" › activar
+     "Car Launcher 3" en Acceso a notificaciones.
+  4. Ajustes › Arranque › "Permiso para abrirse solo" › activarlo (recomendado).
+  5. Pantalla de inicio: apretar el botón Inicio/Home de la radio. Android pregunta qué
+     launcher usar: la PRIMERA vez elegir Car Launcher 3 › "SOLO UNA VEZ" y probar un rato.
+     Si todo anda bien, la próxima vez elegir "SIEMPRE"
+     (o Ajustes › Arranque › Pantalla de inicio de la radio).
+
+
+5. PLAN DE PRUEBAS
+------------------
+Marcar cada punto con OK / FALLA y anotar qué pasó. Para las fallas, una foto de la pantalla.
+
+A. RENDIMIENTO
+  A1. Ajustes › Pantalla › activar "Recuadro de prueba". Arriba aparece
+      "Prueba · arranque X s · N fps · M MB".
+  A2. Cerrar la app desde recientes y abrirla de nuevo: anotar "arranque" (objetivo < 3 s).
+  A3. fps en el inicio con el holograma (objetivo 50–60). Memoria (MB).
+  A4. Apagar el recuadro al terminar.
+
+B. BIENVENIDA
+  B1. Al abrir la app por primera vez: animación de ~5 s (auto en holograma, "Hola, …",
+      tres chequeos: aceite, neumáticos, documentos). Tocar la pantalla la saltea.
+  B2. Ajustes › Arranque › "Ver bienvenida" la repite. "Bienvenida animada" la apaga.
+
+C. INICIO
+  C1. Los íconos de la barra de abajo quedan centrados con su texto.
+  C2. Hora con los dos puntos titilando y fecha en español.
+  C3. Tocar "Hola, conductor" › poner el nombre › se actualiza.
+  C4. Botón "Noche auto" › "Noche" › "Día" › "Noche auto" (cambia tema; en Auto se pone
+      oscuro a la puesta del sol).
+  C5. Ajustes › Tamaño: Normal / Grande / Muy grande. Nada se tiene que encimar ni cortar.
+
+D. GPS, VELOCIDAD Y VIAJE (manejando, con acompañante)
+  D1. Píldora "GPS" con punto que late cuando hay señal; "Sin GPS" bajo techo.
+  D2. La velocidad coincide (aprox.) con el velocímetro del auto.
+  D3. Tocar la velocidad › elegir aviso (ej. 60): al pasarlo el número se pone naranja.
+  D4. Viaje: km, tiempo y promedio suben al manejar. Tocar › "Poner en cero" funciona.
+      Tras 20 min parado, el próximo movimiento empieza un viaje nuevo.
+
+E. CLIMA
+  E1. Con internet: temperatura, descripción, máx/mín, humedad y viento de la zona.
+  E2. Sin internet: muestra el último con "hace X min/h".
+
+F. MANTENIMIENTO
+  F1. Tocar el medidor "Aceite motor": pide primero los km del TABLERO › cargar el número
+      que marca el auto.
+  F2. Luego: "Lo cambié hoy" › el medidor muestra los km que faltan (intervalo 5.000).
+  F3. "Próximo cambio › Cambiar": poner el km del sticker del taller › se recalcula.
+  F4. "Se cambia cada": cambiar intervalo › se ve reflejado.
+  F5. Manejar unos km: el tablero (arriba "Mantenimiento · tablero …") sube y lo que
+      falta baja. Comparar con el cuentakilómetros real.
+  F6. "Ver todo" abre la pantalla Mantenimiento: al tocar cada ítem el holograma va a la
+      pieza (aceite, caja, filtro, ruedas, frenos, correa) y aparece el texto.
+  F7. Vencimientos: elegir fecha del seguro a menos de 30 días › se pone naranja y el
+      inicio dice "Ver todo · 1 ⚠".
+  F8. "Agregar": un ítem por km (ej. Filtro de combustible) y uno por fecha (ej. Patente).
+      Ambos aparecen en la lista; "Eliminar ítem" los borra.
+
+G. MÚSICA (tarjeta derecha, página 1)  ← PUNTO PENDIENTE IMPORTANTE
+  G1. Con música del CELULAR por BLUETOOTH: ¿se ve tema/artista/carátula?
+  G2. ¿Funcionan anterior, play/pausa y siguiente?
+  G3. Si no funcionan: mantener apretada la carátula (o Ajustes › Diagnóstico de música).
+      Con música sonando, probar ⏯ en cada modo: "Automático", "Tecla del sistema",
+      "Directo a app Música" (para este último, antes mantener apretado "Música" en la
+      barra y elegir la app de música Bluetooth de la radio).
+      Anotar con qué modo funciona y sacar FOTO del recuadro de texto del diagnóstico.
+  G4. Repetir G1–G2 con Spotify / YouTube Music en la radio (si hay).
+  G5. Tocar la carátula abre la app que está sonando.
+
+H. MAPA (tarjeta derecha, página 2)
+  H1. Deslizar de costado o tocar las bolitas de arriba para pasar de página.
+  H2. Con internet: se ven las calles y la flecha de posición sigue al auto. + / − zoom.
+  H3. Sin internet: las zonas ya vistas se siguen viendo.
+  H4. "Casa": primera vez › "Estoy acá ahora" o escribir dirección. Después un toque
+      abre la navegación en Maps. Mantener apretado para cambiarla. Igual "Trabajo".
+  H5. Navegando con Google Maps o Waze: arriba del mapa aparece el próximo giro
+      (distancia y calle). Tocarlo vuelve a Maps.
+
+I. ACCESOS, BARRA Y APPS
+  I1. Página 3 "Accesos": "Agregar" una app; mantener apretada › cambiar / quitar.
+  I2. Barra: Mapas, Música, Radio, Teléfono: la primera vez piden elegir la app; después
+      la abren. Mantener apretado para cambiarla. Bluetooth abre los ajustes de BT.
+  I3. Botón "Apps": todas las apps; tocar abre; mantener apretada agrega a Accesos.
+  I4. Botón Atrás de la radio: desde cualquier pantalla vuelve al inicio.
+
+J. AJUSTES
+  J1. Todas las filas abren lo que dicen. Los permisos muestran "Permitido" cuando están.
+
+K. ARRANQUE Y CONTACTO  ← PROBAR CON CUIDADO (antes una versión colgó la radio)
+  K1. Con Car Launcher 3 como inicio: botón Home lleva al launcher.
+  K2. Abrir otra app (ej. Maps), sacar el contacto, esperar 1 min, volver a dar contacto:
+      la radio tiene que despertar NORMAL y a los ~3 s traer el launcher con la bienvenida.
+      (Se puede apagar en Ajustes › Arranque › "Abrir al dar contacto".)
+  K3. Repetir K2 tres veces, y una vez dejando el auto apagado varias horas.
+  K4. Si la radio queda sin imagen: RST. Anotar en qué paso pasó.
+  K5. Apagar y prender la radio completa: debe arrancar directo en Car Launcher 3.
+
+
+6. QUÉ REPORTAR
+---------------
+  - Versión (Ajustes, arriba: "versión 3.0-etapa5").
+  - Lista de puntos con OK/FALLA + fotos de las fallas.
+  - Números de A2/A3. Modo de música que funcionó (G3) + foto del diagnóstico.
+  - Errores de compilación: el texto completo de las líneas "e:".
+
+
+7. SI ALGO SALE MAL
+-------------------
+  - La app se cierra sola varias veces: al tercer cierre en 2 min abre sola el selector de
+    pantalla de inicio de Android para volver al launcher original.
+  - Volver al launcher original a mano: Ajustes de Android › Aplicaciones › Car Launcher 3 ›
+    "Abrir de forma predeterminada" › Borrar valores predeterminados. O desinstalarla.
+  - Con cable/ADB (si hay): adb uninstall com.rgservice.carlauncher3
+  - Radio colgada sin imagen: RST con un clip.
+
+
+8. ESTRUCTURA DEL CÓDIGO
+------------------------
+app/src/main/java/com/rgservice/carlauncher/
+  CarApp.kt                         red de seguridad ante cierres repetidos
+  MainActivity.kt                   entrada: permisos, navegación entre pantallas, ventanas
+  core/DesignScale.kt               escala Normal/Grande/Muy grande (alto de diseño 720/640/580 dp)
+  core/HoloVideoView.kt             reproductor de videos del holograma (TextureView + MediaPlayer)
+  core/MapTileView.kt               mapa OpenStreetMap con caché sin conexión
+  data/HomeState.kt                 todo lo que muestra el inicio
+  data/CarRepository.kt             junta GPS + preferencias + clima + hora en un solo estado
+  data/Prefs.kt / data/Sun.kt       preferencias ("cl3") / salida y puesta del sol
+  data/location/TripService.kt      servicio GPS en primer plano + abrir al dar contacto
+  data/location/LiveGps.kt          última lectura del GPS
+  data/maint/Maintenance.kt         mantenimiento por km del tablero + vencimientos + propios
+  data/weather/WeatherRepository.kt clima Open-Meteo con caché
+  data/media/MediaRepository.kt     música: sesiones + 3 modos de envío de botones + diagnóstico
+  data/media/CarNotificationListener.kt  permiso de música + próximo giro de Maps/Waze
+  data/apps/AppsRepository.kt       apps, accesos, botones de la barra, Casa/Trabajo
+  ui/home/HomeScreen.kt             pantalla de inicio
+  ui/home/Dialogs.kt                todas las ventanas (km, mantenimiento, fechas, apps, música…)
+  ui/home/HomeViewModel.kt          une datos + preferencias de la interfaz
+  ui/pages/RightCard.kt             tarjeta derecha: Música, Mapa, Accesos
+  ui/maint/MaintScreen.kt           mantenimiento con visor holográfico
+  ui/apps/AppsScreen.kt             todas las apps
+  ui/settings/SettingsScreen.kt     ajustes
+  ui/welcome/WelcomeScreen.kt       bienvenida animada
+  ui/components/                    tarjeta, textos, medidores, barra, encabezado, rendimiento
+  ui/theme/Theme.kt                 colores claro/oscuro y tipografía Barlow
+res/raw/holo_*.mp4                  videos del holograma (inicio, intro, piezas)
+.github/workflows/build.yml         compilación automática en GitHub
+
+
+9. PARA EL ASISTENTE QUE AYUDE CON ESTE PROYECTO
+------------------------------------------------
+Contexto:
+  - Reescritura desde cero (Kotlin + Jetpack Compose) de un launcher anterior hecho con
+    Views (CarLauncher13). Se entregó por etapas 1→5; esta es la etapa 5 (completa).
+  - Etapa 1 se compiló y probó en la radio: 58–60 fps, 55 MB. Etapas 2–5 se escribieron sin
+    poder compilar Compose (sin acceso a Maven): la capa de datos (data/, core/MapTileView,
+    CarApp) sí se verificó con kotlinc contra android.jar; la UI Compose NO. Es esperable que
+    la primera compilación tenga algunos errores chicos en ui/ o MainActivity: corregirlos
+    sin cambiar el diseño ni el comportamiento.
+  - Versiones FIJAS (no actualizar): AGP 8.1.4, Kotlin 1.9.22, Compose compiler 1.5.10,
+    Compose BOM 2024.02.00, Gradle 8.2, compileSdk 34, minSdk 26, targetSdk 33, Java 17.
+    APIs de foundation 1.6 marcadas experimentales (HorizontalPager, combinedClickable) llevan
+    @OptIn(ExperimentalFoundationApi::class).
+  - Todos los tamaños están en "dp de diseño": DesignScale reemplaza LocalDensity para que el
+    alto de pantalla = 720/640/580 dp según el tamaño elegido (1 sp = 1 dp).
+  - Textos de la interfaz en español rioplatense (vos), cortos y claros.
+  - Cuidado especial con el reposo de la radio: al apagar la pantalla (sacar contacto) el
+    servicio suelta el GPS; al encenderla espera 3 s antes de GPS y de abrir el launcher.
+    Una versión vieja colgó la radio tras sacar el contacto (se recuperó con RST).
+
+Pendientes / decisiones abiertas:
+  - Música por Bluetooth: falta saber qué modo de envío de botones funciona en esta radio
+    (prueba G3). Con el resultado, dejar ese modo por defecto en MediaRepository.mode.
+  - Si el modo "Directo a app Música" tampoco funciona, pedir el nombre de paquete de la app
+    Bluetooth de la radio (aparece en el diagnóstico) e investigar sus broadcasts propios.
+  - Internet en el auto: hotspot automático del celular (depende de la marca del teléfono).
+  - Opcional: descargar calles de la zona para el mapa sin conexión; vista simplificada
+    para "Muy grande".
+
+Cómo guiar las pruebas: seguir la sección 5 en orden (A→K), de a un bloque, pidiendo foto
+cuando algo falla. El bloque K (contacto) al final y con el auto estacionado.

@@ -1,0 +1,32 @@
+# Compila el APK en GitHub (pestaña Actions). El resultado queda en "Artifacts".
+name: Compilar APK
+
+# Solo se compila a mano: Actions › Compilar APK › "Run workflow"
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # El proyecto no trae gradlew: se usa Gradle 8.2 (la versión que espera AGP 8.1.4)
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
+
+      - name: Compilar release y debug
+        run: gradle --no-daemon assembleRelease assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CarLauncher3-apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk

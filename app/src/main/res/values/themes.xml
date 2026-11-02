@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- La ventana arranca oscura para que no haya destello blanco al abrir. Los colores reales los pone Compose. -->
+    <style name="Theme.CarLauncher" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#FF0B0D10</item>
+        <item name="android:statusBarColor">#FF0B0D10</item>
+        <item name="android:navigationBarColor">#FF0B0D10</item>
+    </style>
+</resources>
