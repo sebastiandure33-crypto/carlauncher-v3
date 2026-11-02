@@ -1,10 +1,11 @@
-# Compila el APK en GitHub (pestaña Actions). Solo a mano: Actions › Compilar APK › "Run workflow".
-# Además lo prueba en un emulador Android 10 (como la radio) y guarda APK, capturas y registro
-# en la rama "apk" del repositorio.
+# Compila el APK en GitHub: pestaña Actions › "Compilar APK" › Run workflow.
+# El APK queda en "Artifacts" (CarLauncher4-apk) y también en la rama "apk".
 name: Compilar APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: write
@@ -20,41 +21,42 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # El proyecto no trae gradlew: se usa Gradle 8.2 (la versión que espera AGP 8.1.4)
-      - uses: gradle/actions/setup-gradle@v3
+      - uses: subosito/flutter-action@v2
         with:
-          gradle-version: '8.2'
+          channel: stable
+          flutter-version: '3.27.4'
+          cache: true
+
+      # Completa la carpeta android/ (gradle, recursos, íconos) sin tocar los archivos propios
+      - name: Generar archivos de plataforma
+        run: |
+          flutter create --platforms=android --org com.rgservice --project-name carlauncher4 .
+          # la radio es Android 10: mínimo Android 8 (API 26)
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 26/' android/app/build.gradle* || true
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 26/' android/app/build.gradle* || true
+          grep -n "minSdk" android/app/build.gradle* || true
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Revisar código
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Compilar release
-        run: gradle --no-daemon assembleRelease
+        run: flutter build apk --release
 
-      - name: Verificar firma y contenido
+      - name: Preparar salida
         run: |
-          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk out/CarLauncher3.apk
-          $BT/apksigner verify --print-certs out/CarLauncher3.apk | tee out/firma.txt
-          $BT/aapt dump badging out/CarLauncher3.apk | tee out/badging.txt
+          cp build/app/outputs/flutter-apk/app-release.apk out/CarLauncher4.apk
           ls -la out
 
-      - name: Habilitar KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Probar en emulador Android 10 (1024x600)
-        uses: reactivecircus/android-emulator-runner@v2
+      - uses: actions/upload-artifact@v4
         with:
-          api-level: 29
-          arch: x86_64
-          target: default
-          disable-animations: false
-          emulator-options: -skin 1024x600 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash .github/test-emulador.sh
+          name: CarLauncher4-apk
+          path: out/CarLauncher4.apk
 
       - name: Guardar en la rama "apk"
-        if: always()
         run: |
           cd out
           git init -q

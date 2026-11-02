@@ -1,0 +1,35 @@
+name: carlauncher4
+description: Car Launcher 4 - pantalla de inicio para la radio del auto (Flutter).
+publish_to: 'none'
+version: 4.0.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: Barlow
+      fonts:
+        - asset: assets/fonts/barlow_regular.ttf
+          weight: 400
+        - asset: assets/fonts/barlow_medium.ttf
+          weight: 500
+        - asset: assets/fonts/barlow_semibold.ttf
+          weight: 600
+        - asset: assets/fonts/barlow_bold.ttf
+          weight: 700
