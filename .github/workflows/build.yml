@@ -50,7 +50,7 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -skin 1024x600 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash .github/test-emulador.sh
 
       - name: Guardar en la rama "apk"
