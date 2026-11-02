@@ -20,7 +20,7 @@
     <application
         android:name=".CarApp"
         android:label="Car Launcher 3"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@drawable/ic_launcher"
         android:theme="@style/Theme.CarLauncher">
 
         <!-- Pantalla de inicio (HOME) de la radio y también ícono en el cajón de apps. -->
