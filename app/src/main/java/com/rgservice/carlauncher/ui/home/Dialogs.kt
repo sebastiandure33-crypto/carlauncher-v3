@@ -51,6 +51,7 @@ import com.rgservice.carlauncher.data.apps.AppsRepository
 import com.rgservice.carlauncher.data.apps.Slot
 import com.rgservice.carlauncher.data.location.LiveGps
 import com.rgservice.carlauncher.data.maint.Maintenance
+import com.rgservice.carlauncher.data.media.MediaRepository
 import com.rgservice.carlauncher.ui.components.CarCard
 import com.rgservice.carlauncher.ui.components.Hairline
 import com.rgservice.carlauncher.ui.components.Txt
@@ -523,16 +524,20 @@ private fun MusicDiagDialog(vm: HomeViewModel, onDismiss: () -> Unit) {
     var mode by remember { mutableStateOf(music.mode) }
     LaunchedEffect(Unit) { while (true) { delay(1000); lines = music.diagnostics() } }
     CarDialog("Diagnóstico de música", onDismiss) {
-        Column(Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(14.dp)).background(c.card2).padding(12.dp)) {
-            lines.forEach { Txt(it, 15, c.text, maxLines = 2, modifier = Modifier.padding(bottom = 4.dp)) }
+        LazyColumn(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp)).background(c.card2).padding(12.dp)) {
+            items(lines) { Txt(it, 15, c.text, maxLines = 2, modifier = Modifier.padding(bottom = 4.dp)) }
         }
-        Txt("Cómo mandar los botones", 16, c.muted, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Automático", "Tecla del sistema", "Directo a app Música").forEachIndexed { i, t ->
-                Chip(t, mode == i, Modifier.weight(1f)) { music.mode = i; mode = i }
+        Txt("Cómo mandar los botones: elegí uno y probá ⏭ con música sonando", 16, c.muted,
+            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
+        MediaRepository.NAMES.chunked(3).forEachIndexed { r, row ->
+            Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEachIndexed { k, t ->
+                    val i = r * 3 + k
+                    Chip("${i + 1}. $t", mode == i, Modifier.weight(1f)) { music.mode = i; mode = i }
+                }
             }
         }
-        Txt("Probá con música sonando:", 16, c.muted, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
+        Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             DialogButton("⏮", primary = false, Modifier.weight(1f)) { music.previous(); lines = music.diagnostics() }
             DialogButton("⏯", primary = true, Modifier.weight(1f)) { music.playPause(); lines = music.diagnostics() }

@@ -1,4 +1,4 @@
-CAR LAUNCHER 3 – versión 3.0-etapa5 (Kotlin + Jetpack Compose)
+CAR LAUNCHER 3 – versión 3.0-etapa5b (Kotlin + Jetpack Compose)
 ================================================================
 
 Launcher (pantalla de inicio) para la radio Android del auto: velocidad y viaje por GPS,
@@ -116,10 +116,12 @@ G. MÚSICA (tarjeta derecha, página 1)  ← PUNTO PENDIENTE IMPORTANTE
   G1. Con música del CELULAR por BLUETOOTH: ¿se ve tema/artista/carátula?
   G2. ¿Funcionan anterior, play/pausa y siguiente?
   G3. Si no funcionan: mantener apretada la carátula (o Ajustes › Diagnóstico de música).
-      Con música sonando, probar ⏯ en cada modo: "Automático", "Tecla del sistema",
-      "Directo a app Música" (para este último, antes mantener apretado "Música" en la
-      barra y elegir la app de música Bluetooth de la radio).
-      Anotar con qué modo funciona y sacar FOTO del recuadro de texto del diagnóstico.
+      En esta radio la música Bluetooth es la app com.tw.bt: publica varias sesiones y declara
+      que no acepta botones ("acepta: nada"). Con música sonando, elegir cada modo (1 a 6)
+      y tocar ⏭; anotar con cuáles CAMBIA el tema (y si salta uno o dos). Probar también ⏯.
+      Modos: 1 Automático · 2 Sesión·comando · 3 Sesión·tecla · 4 Tecla del sistema ·
+      5 Directo a la app · 6 Todas las sesiones. El que funcione queda guardado.
+      Sacar FOTO del recuadro de texto (deslizar para ver las 8 líneas).
   G4. Repetir G1–G2 con Spotify / YouTube Music en la radio (si hay).
   G5. Tocar la carátula abre la app que está sonando.
 
@@ -154,7 +156,7 @@ K. ARRANQUE Y CONTACTO  ← PROBAR CON CUIDADO (antes una versión colgó la rad
 
 6. QUÉ REPORTAR
 ---------------
-  - Versión (Ajustes, arriba: "versión 3.0-etapa5").
+  - Versión (Ajustes, arriba: "versión 3.0-etapa5b").
   - Lista de puntos con OK/FALLA + fotos de las fallas.
   - Números de A2/A3. Modo de música que funcionó (G3) + foto del diagnóstico.
   - Errores de compilación: el texto completo de las líneas "e:".

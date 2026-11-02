@@ -133,36 +133,92 @@ class MediaRepository(private val ctx: Context, private val sp: SharedPreference
     /* ------------------------------------------------------------ controles */
 
     /**
-     * Cómo se mandan los botones:
-     *  0 Automático: a la app que está sonando (si publica su sesión); si no, tecla del sistema
- *    (Android la manda a la última app que reprodujo).
-     *  1 Tecla del sistema: Android se la da a la última app que reprodujo (sirve para Bluetooth).
-     *  2 Directo a la app de "Música" de la barra (para apps Bluetooth que solo escuchan así).
+     * Cómo se mandan los botones (se elige en el diagnóstico de música):
+     *  0 Automático: comando a la sesión que suena si declara que acepta botones; si no, tecla del sistema.
+     *  1 Sesión · comando: transportControls de la sesión que suena (sin importar lo que declare).
+     *  2 Sesión · tecla: KeyEvent multimedia directo a esa sesión (dispatchMediaButtonEvent).
+     *  3 Tecla del sistema: AudioManager.dispatchMediaKeyEvent (Android elige la app).
+     *  4 Directo a la app: broadcast ACTION_MEDIA_BUTTON al paquete que suena (o al de "Música").
+     *  5 Todas las sesiones de la app: comando a cada sesión de ese paquete (algunas radios, como
+     *    la app Bluetooth com.tw.bt, publican varias y solo una obedece). Play/pausa es seguro
+     *    (pause/play explícitos); siguiente/anterior podría saltar dos si obedecen dos.
      */
     var mode: Int
         get() = sp.getInt("mediaMode", 0)
         set(v) { sp.edit().putInt("mediaMode", v).apply() }
 
+    companion object Routes {
+        val NAMES = listOf("Automático", "Sesión · comando", "Sesión · tecla", "Tecla del sistema", "Directo a la app", "Todas las sesiones")
+
+        /** Posición actual estimada (entre una actualización y otra de la app). */
+        fun positionNow(m: Media): Long {
+            var pos = m.positionMs
+            if (m.playing && m.positionAt > 0) pos += ((SystemClock.elapsedRealtime() - m.positionAt) * m.speed).toLong()
+            return if (m.durationMs > 0) pos.coerceIn(0L, m.durationMs) else pos.coerceAtLeast(0L)
+        }
+    }
+
     /** Por dónde salió el último botón (se ve en el diagnóstico). */
     var lastRoute: String = "—"
         private set
 
-    fun playPause() = send(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) { c ->
-        if (c.playbackState?.state == PlaybackState.STATE_PLAYING) c.transportControls.pause() else c.transportControls.play()
+    private enum class Cmd(val code: Int) {
+        PlayPause(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE), Next(KeyEvent.KEYCODE_MEDIA_NEXT), Prev(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
     }
-    fun next() = send(KeyEvent.KEYCODE_MEDIA_NEXT) { it.transportControls.skipToNext() }
-    fun previous() = send(KeyEvent.KEYCODE_MEDIA_PREVIOUS) { it.transportControls.skipToPrevious() }
 
-    private fun send(code: Int, viaSession: (MediaController) -> Unit) {
+    fun playPause() = send(Cmd.PlayPause)
+    fun next() = send(Cmd.Next)
+    fun previous() = send(Cmd.Prev)
+
+    private fun sessions(): List<MediaController> =
+        try { msm.getActiveSessions(listener) } catch (e: SecurityException) { emptyList() }
+
+    private fun command(c: MediaController, cmd: Cmd) {
+        val t = c.transportControls
+        when (cmd) {
+            Cmd.PlayPause -> if (c.playbackState?.state == PlaybackState.STATE_PLAYING) t.pause() else t.play()
+            Cmd.Next -> t.skipToNext()
+            Cmd.Prev -> t.skipToPrevious()
+        }
+    }
+
+    private fun send(cmd: Cmd) {
         val c = current
-        when {
-            // Solo si esa app está sonando: si está quieta puede ser una sesión vieja y la música
-            // real (por ejemplo Bluetooth) no publica sesión; ahí la tecla del sistema es más segura.
-            mode == 0 && c != null && c.playbackState?.state == PlaybackState.STATE_PLAYING -> {
-                try { viaSession(c); lastRoute = "sesión de ${appLabel(c.packageName)}" } catch (e: Exception) { systemKey(code) }
+        val label = c?.let { appLabel(it.packageName) } ?: ""
+        try {
+            when (mode) {
+                0 -> if (c != null && c.playbackState?.state == PlaybackState.STATE_PLAYING && (c.playbackState?.actions ?: 0L) != 0L) {
+                    command(c, cmd); lastRoute = "sesión de $label (automático)"
+                } else systemKey(cmd.code)
+                1 -> if (c != null) { command(c, cmd); lastRoute = "sesión de $label · comando" } else systemKey(cmd.code)
+                2 -> if (c != null) {
+                    c.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, cmd.code))
+                    c.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, cmd.code))
+                    lastRoute = "sesión de $label · tecla"
+                } else systemKey(cmd.code)
+                3 -> systemKey(cmd.code)
+                4 -> appKey(cmd.code, c?.packageName ?: sp.getString("slot_music", null))
+                5 -> {
+                    val pkg = c?.packageName
+                    val all = if (pkg != null) sessions().filter { it.packageName == pkg } else emptyList()
+                    if (all.isEmpty()) systemKey(cmd.code)
+                    else {
+                        val playing = c?.playbackState?.state == PlaybackState.STATE_PLAYING
+                        all.forEach { s ->
+                            try {
+                                when (cmd) {
+                                    Cmd.PlayPause -> if (playing) s.transportControls.pause() else s.transportControls.play()
+                                    else -> command(s, cmd)
+                                }
+                            } catch (e: Exception) { }
+                        }
+                        lastRoute = "${all.size} sesiones de $label"
+                    }
+                }
+                else -> systemKey(cmd.code)
             }
-            mode == 2 -> appKey(code)
-            else -> systemKey(code)
+        } catch (e: Exception) {
+            systemKey(cmd.code)
         }
     }
 
@@ -172,15 +228,12 @@ class MediaRepository(private val ctx: Context, private val sp: SharedPreference
         lastRoute = "tecla del sistema"
     }
 
-    private fun appKey(code: Int) {
-        val pkg = sp.getString("slot_music", null)
-        if (pkg == null) { systemKey(code); lastRoute = "tecla del sistema (no hay app de Música elegida)"; return }
-        try {
-            for (action in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
-                ctx.sendBroadcast(Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg).putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(action, code)))
-            }
-            lastRoute = "directo a ${appLabel(pkg)}"
-        } catch (e: Exception) { systemKey(code) }
+    private fun appKey(code: Int, pkg: String?) {
+        if (pkg == null) { systemKey(code); lastRoute = "tecla del sistema (no hay app)"; return }
+        for (action in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+            ctx.sendBroadcast(Intent(Intent.ACTION_MEDIA_BUTTON).setPackage(pkg).putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(action, code)))
+        }
+        lastRoute = "directo a ${appLabel(pkg)} ($pkg)"
     }
 
     /** Abre la app que está sonando (o la elegida para Música). */
@@ -209,19 +262,12 @@ class MediaRepository(private val ctx: Context, private val sp: SharedPreference
                 if (acts and PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L) add("anterior")
             }
             val mark = if (c.sessionToken == current?.sessionToken) "▶ " else "· "
-            out += "$mark${appLabel(c.packageName)} (${c.packageName}) — $st — acepta: ${can.joinToString().ifEmpty { "nada" }}"
+            val title = c.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.take(24) ?: "sin título"
+            out += "$mark${appLabel(c.packageName)} (${c.packageName}) — $st — acepta: ${can.joinToString().ifEmpty { "nada" }} — \"$title\""
         }
         out += "App de Música de la barra: " + (sp.getString("slot_music", null)?.let { "${appLabel(it)} ($it)" } ?: "sin elegir")
-        out += "Último botón enviado por: $lastRoute"
+        out += "Modo: ${mode + 1}. ${NAMES.getOrElse(mode) { "?" }} · último botón por: $lastRoute"
         return out
     }
 
-    /** Posición actual estimada (entre una actualización y otra de la app). */
-    companion object {
-        fun positionNow(m: Media): Long {
-            var pos = m.positionMs
-            if (m.playing && m.positionAt > 0) pos += ((SystemClock.elapsedRealtime() - m.positionAt) * m.speed).toLong()
-            return if (m.durationMs > 0) pos.coerceIn(0L, m.durationMs) else pos.coerceAtLeast(0L)
-        }
-    }
 }
