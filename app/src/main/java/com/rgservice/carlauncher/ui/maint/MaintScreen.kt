@@ -126,7 +126,7 @@ fun MaintScreen(m: MaintSnapshot, initialSel: String?, onSelect: (String) -> Uni
             val listW = if (maxWidth < 1100.dp) 340.dp else 400.dp
             Row(Modifier.fillMaxSize()) {
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                    Box(Modifier.weight(1f, fill = false).fillMaxWidth()) {
                         Viewer(kmSel, dateSel, sel, Modifier.align(Alignment.TopCenter).aspectRatio(16f / 9f))
                     }
                     Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

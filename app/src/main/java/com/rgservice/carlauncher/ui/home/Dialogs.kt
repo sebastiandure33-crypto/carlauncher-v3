@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.SideEffect
 import com.rgservice.carlauncher.data.HomeState
 import com.rgservice.carlauncher.data.apps.AppEntry
 import com.rgservice.carlauncher.data.apps.AppsRepository
@@ -273,8 +276,16 @@ fun HomeDialogs(dialog: HomeDialog?, s: HomeState, vm: HomeViewModel, open: (Hom
 /* ------------------------------------------------------------------ piezas */
 
 @Composable
-private fun CarDialog(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+private fun CarDialog(title: String, onDismiss: () -> Unit, top: Boolean = false, content: @Composable () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // Las ventanas con teclado van arriba: así el teclado no tapa el campo ni el botón Guardar
+        val view = LocalView.current
+        if (top) SideEffect {
+            (view.parent as? DialogWindowProvider)?.window?.let { w ->
+                w.setGravity(android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL)
+                w.attributes = w.attributes.apply { y = 12 }
+            }
+        }
         CarCard(Modifier.width(560.dp), padding = PaddingValues(28.dp)) {
             Column(Modifier.fillMaxWidth()) {
                 Txt(title, 28, weight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
@@ -328,14 +339,17 @@ private fun NumberDialog(title: String, help: String, initial: Int?, suffix: Str
     var v by remember { mutableStateOf(TextFieldValue(start, TextRange(start.length))) }
     val num = v.text.toIntOrNull()
     val save = { if (num != null) onSave(num) }
-    CarDialog(title, onDismiss) {
-        Txt(help, 17, CarTheme.colors.muted, maxLines = 3, modifier = Modifier.padding(bottom = 16.dp))
-        Field(v, { nv -> v = nv.copy(text = nv.text.filter(Char::isDigit).take(7)) }, KeyboardType.Number, suffix, onDone = save)
-        Txt(num?.let { "${it.fmtKm()} $suffix" } ?: " ", 16, CarTheme.colors.muted, modifier = Modifier.padding(top = 6.dp))
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DialogButton("Cancelar", primary = false, Modifier.weight(1f), onClick = onDismiss)
-            DialogButton("Guardar", primary = true, Modifier.weight(1f), onClick = save)
+    CarDialog(title, onDismiss, top = true) {
+        Txt(help, 16, CarTheme.colors.muted, maxLines = 2, modifier = Modifier.padding(bottom = 12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Field(v, { nv -> v = nv.copy(text = nv.text.filter(Char::isDigit).take(7)) }, KeyboardType.Number, suffix,
+                onDone = save, modifier = Modifier.weight(1f))
+            DialogButton("Guardar", primary = true, Modifier.width(150.dp), onClick = save)
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Txt(num?.let { "${it.fmtKm()} $suffix" } ?: " ", 16, CarTheme.colors.muted, modifier = Modifier.weight(1f))
+            Txt("Cancelar", 17, CarTheme.colors.accent, FontWeight.SemiBold,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onDismiss).padding(8.dp))
         }
     }
 }
@@ -344,12 +358,15 @@ private fun NumberDialog(title: String, help: String, initial: Int?, suffix: Str
 private fun TextDialog(title: String, initial: String, maxLen: Int = 20, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var v by remember { mutableStateOf(TextFieldValue(initial, TextRange(initial.length))) }
     val save = { onSave(v.text) }
-    CarDialog(title, onDismiss) {
-        Field(v, { nv -> v = nv.copy(text = nv.text.take(maxLen)) }, KeyboardType.Text, null, onDone = save)
-        Spacer(Modifier.height(22.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DialogButton("Cancelar", primary = false, Modifier.weight(1f), onClick = onDismiss)
-            DialogButton("Guardar", primary = true, Modifier.weight(1f), onClick = save)
+    CarDialog(title, onDismiss, top = true) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Field(v, { nv -> v = nv.copy(text = nv.text.take(maxLen)) }, KeyboardType.Text, null,
+                onDone = save, modifier = Modifier.weight(1f))
+            DialogButton("Guardar", primary = true, Modifier.width(150.dp), onClick = save)
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.End) {
+            Txt("Cancelar", 17, CarTheme.colors.accent, FontWeight.SemiBold,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onDismiss).padding(8.dp))
         }
     }
 }
@@ -361,13 +378,14 @@ private fun Field(
     type: KeyboardType,
     suffix: String?,
     onDone: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val c = CarTheme.colors
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(200); try { focus.requestFocus() } catch (e: Exception) { } }
     val shape = RoundedCornerShape(18.dp)
     Row(
-        Modifier.fillMaxWidth().height(72.dp).clip(shape).background(c.card2).border(1.dp, c.accent, shape)
+        modifier.fillMaxWidth().height(72.dp).clip(shape).background(c.card2).border(1.dp, c.accent, shape)
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -490,7 +508,7 @@ private fun AddItemDialog(onDismiss: () -> Unit, onAdd: (name: String, interval:
     var v by remember { mutableStateOf(TextFieldValue("")) }
     var byKm by remember { mutableStateOf(true) }
     var interval by remember { mutableStateOf(10000) }
-    CarDialog("Agregar al mantenimiento", onDismiss) {
+    CarDialog("Agregar al mantenimiento", onDismiss, top = true) {
         Txt("Nombre (ej.: Filtro de combustible, Patente)", 16, c.muted, modifier = Modifier.padding(bottom = 8.dp))
         Field(v, { nv -> v = nv.copy(text = nv.text.take(28)) }, KeyboardType.Text, null, onDone = {})
         Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

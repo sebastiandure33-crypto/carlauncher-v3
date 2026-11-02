@@ -29,14 +29,22 @@ shot 02_inicio 8
 tap "Ver todo";            shot 03_mantenimiento 4
 tap "Rotación";            shot 04_mantenimiento_ruedas 4
 adb shell input keyevent KEYCODE_BACK
+# Cargar km del tablero escribiendo con el teclado y marcar "Lo cambié hoy"
 tap "Aceite motor";        shot 05_ventana_tablero 2
-adb shell input keyevent KEYCODE_BACK; sleep 1
+adb shell input text 120000; shot 05b_tablero_escrito 1
+adb shell input keyevent KEYCODE_ENTER; shot 05c_ventana_aceite 2
+tap "Lo cambié hoy";       shot 05d_inicio_con_aceite 3
+tap "Ver todo";            shot 05e_mantenimiento_cargado 4
+adb shell input keyevent KEYCODE_BACK; sleep 2
 tap "Apps";                shot 06_apps 4
-adb shell input keyevent KEYCODE_BACK
+adb shell input keyevent KEYCODE_BACK; sleep 2
 tap "Ajustes";             shot 07_ajustes 3
+adb shell input swipe 512 500 512 150 400; shot 07b_ajustes_abajo 2
 tap "Diagnóstico";         shot 08_diagnostico_musica 2
 adb shell input keyevent KEYCODE_BACK; sleep 1
-adb shell input keyevent KEYCODE_BACK; sleep 1
+tap "Nombre";              shot 08b_nombre 2
+adb shell input text Ruben; adb shell input keyevent KEYCODE_ENTER; sleep 1
+adb shell input keyevent KEYCODE_BACK; sleep 2
 adb shell input swipe 900 300 700 300 300; shot 09_pagina_mapa 4
 adb shell input swipe 900 300 700 300 300; shot 10_pagina_accesos 2
 tap "Noche auto";          shot 11_modo_noche 2
