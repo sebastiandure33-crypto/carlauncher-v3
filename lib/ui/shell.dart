@@ -74,10 +74,14 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
           Expanded(
             child: ValueListenableBuilder<int>(
               valueListenable: shellTab,
+              // Solo anima la pantalla visible (la radio tiene 4 núcleos A53 y poca RAM)
               builder: (_, tab, __) => IndexedStack(
                 index: tab,
                 sizing: StackFit.expand,
-                children: const [HomePage(), AudioPage(), MaintPage(), AppsPage(), MapPage()],
+                children: [
+                  for (final (i, page) in const [HomePage(), AudioPage(), MaintPage(), AppsPage(), MapPage()].indexed)
+                    TickerMode(enabled: i == tab, child: page),
+                ],
               ),
             ),
           ),

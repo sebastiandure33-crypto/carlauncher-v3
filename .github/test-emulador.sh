@@ -34,7 +34,7 @@ PY
 bright() { adb shell settings get system screen_brightness | tr -d '\r'; }
 vol() { adb shell media volume --stream 3 --get 2>/dev/null | grep -o 'volume is [0-9]*' | grep -o '[0-9]*$'; }
 
-adb shell wm density 160
+adb shell wm density 118   # igual que la radio (Allwinner A133, 118 dpi)
 adb shell settings put secure immersive_mode_confirmations confirmed
 adb shell settings put global window_animation_scale 1
 adb shell wm size | tee $OUT/pantalla.txt

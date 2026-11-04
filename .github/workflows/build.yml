@@ -49,12 +49,17 @@ jobs:
         run: |
           mkdir -p out
           cp build/app/outputs/flutter-apk/app-release.apk out/CarLauncher4.apk
+          # APK solo para la radio (Allwinner A133, sistema de 32 bits): más liviano
+          flutter build apk --release --split-per-abi --target-platform android-arm
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk out/CarLauncher4-radio.apk
           ls -la out
 
       - uses: actions/upload-artifact@v4
         with:
           name: CarLauncher4-apk
-          path: out/CarLauncher4.apk
+          path: |
+            out/CarLauncher4-radio.apk
+            out/CarLauncher4.apk
 
       - name: Habilitar KVM
         run: |

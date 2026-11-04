@@ -301,6 +301,8 @@ class _DiagPageState extends State<DiagPage> {
     final extra = [
       '— Apps elegidas —',
       for (final sl in Slot.values) '${sl.label}: ${s.slot(sl) ?? 'sin elegir'}${s.slotIsAuto(sl) ? ' (detectada)' : ''}',
+      '— Apps instaladas (nombre — paquete) —',
+      for (final a in await App.i.apps(refresh: true)) '${a.label} — ${a.pkg}',
     ];
     if (mounted) setState(() => _lines = [...l, ...extra]);
   }

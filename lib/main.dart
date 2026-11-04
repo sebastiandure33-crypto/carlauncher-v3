@@ -8,6 +8,10 @@ import 'ui/shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // La radio tiene 1,4 GB de RAM: menos memoria para imágenes (calles del mapa, íconos)
+  PaintingBinding.instance.imageCache
+    ..maximumSizeBytes = 48 << 20
+    ..maximumSize = 400;
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
   debugPrint('CL4 arranque');
