@@ -9,10 +9,11 @@ import '../../data/models.dart';
 import '../../data/settings.dart';
 import '../shell.dart';
 import '../widgets/common.dart';
-import '../widgets/dialogs.dart';
 import '../widgets/gauge.dart';
 import '../widgets/holo_car.dart';
 import '../widgets/map_view.dart';
+import '../widgets/nav_widgets.dart';
+import 'map_page.dart' show openMapSearch;
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -21,7 +22,10 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     const side = 252.0, pad = 14.0;
     return Stack(fit: StackFit.expand, children: [
-      const CarMap(padding: EdgeInsets.fromLTRB(side + pad, 80, side + pad, 80)),
+      CarMap(
+        padding: const EdgeInsets.fromLTRB(side + pad, 80, side + pad, 80),
+        onLongPress: (_) => shellTab.value = 4,
+      ),
       const Positioned(
         top: pad,
         left: pad,
@@ -36,18 +40,7 @@ class HomePage extends StatelessWidget {
         width: side,
         child: Column(children: [_MediaCard(), SizedBox(height: 10), Expanded(child: _CarCard())]),
       ),
-      Positioned(
-        top: pad,
-        left: side + pad * 2,
-        right: side + pad * 2,
-        child: ValueListenableBuilder<NavInfo?>(
-          valueListenable: App.i.nav,
-          builder: (_, n, __) => AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: n == null ? const SizedBox.shrink() : _NavBanner(n),
-          ),
-        ),
-      ),
+      const Positioned(top: pad, left: side + pad * 2, right: side + pad * 2, child: NavBanner()),
       const Positioned(bottom: pad, left: side + pad * 2, right: side + pad * 2, child: _Destinations()),
     ]);
   }
@@ -278,7 +271,10 @@ class _MediaCard extends StatelessWidget {
                             size: 54,
                             bg: c.text,
                             fg: c.ground,
-                            onTap: () => Native.media('toggle', pkg: s?.pkg ?? App.i.settings.slot(Slot.music)),
+                            onTap: () async {
+                              final msg = await App.i.playSource(Slot.music, session: s);
+                              if (msg.isNotEmpty && context.mounted) toast(context, msg);
+                            },
                           ),
                           RoundBtn(icon: Icons.skip_next_rounded, label: 'Siguiente', bg: Colors.transparent, size: 46,
                               onTap: () => Native.media('next', pkg: s?.pkg)),
@@ -382,90 +378,18 @@ class _CarCardState extends State<_CarCard> {
       );
 }
 
-/* ------------------------------------------------------------ navegación */
-
-class _NavBanner extends StatelessWidget {
-  const _NavBanner(this.n);
-  final NavInfo n;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.pal;
-    final m = n.maneuver.toLowerCase();
-    final icon = m.contains('izquierda')
-        ? Icons.turn_left_rounded
-        : m.contains('derecha')
-            ? Icons.turn_right_rounded
-            : m.contains('rotonda')
-                ? Icons.rotate_right_rounded
-                : m.contains('destino')
-                    ? Icons.flag_rounded
-                    : Icons.straight_rounded;
-    return Tap(
-      onTap: () => Native.openNav(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: c.accentGradient,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: c.shadow, blurRadius: 30, offset: const Offset(0, 14))],
-        ),
-        child: Row(children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(color: alpha(c.onAccent, 0.14), borderRadius: BorderRadius.circular(14)),
-            child: Icon(icon, size: 30, color: c.onAccent),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(n.dist, maxLines: 1, overflow: TextOverflow.ellipsis, style: ts(24, w: FontWeight.w700, c: c.onAccent, h: 1.1)),
-              Text([n.maneuver, n.street].where((e) => e.isNotEmpty).join(' · '),
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: ts(14, w: FontWeight.w700, c: alpha(c.onAccent, 0.8))),
-            ]),
-          ),
-          if (n.eta.isNotEmpty) Text(n.eta, style: ts(13, w: FontWeight.w700, c: alpha(c.onAccent, 0.8))),
-        ]),
-      ),
-    );
-  }
-}
-
 /* ------------------------------------------------------------ destinos */
 
 class _Destinations extends StatelessWidget {
   const _Destinations();
-
-  Future<void> _go(BuildContext context, String key, String name) async {
-    final app = App.i;
-    if (app.settings.place(key) == null) {
-      await _save(context, key, name);
-      return;
-    }
-    if (!await app.goTo(key) && context.mounted) toast(context, 'No se pudo abrir la navegación');
-  }
-
-  Future<void> _save(BuildContext context, String key, String name) async {
-    final g = App.i.gps.value;
-    if (g == null) {
-      toast(context, 'Para guardar $name hace falta señal de GPS');
-      return;
-    }
-    final ok = await confirm(context, 'Guardar $name', '¿Guardar la ubicación actual como $name? Después tocás el botón y te lleva.');
-    if (ok) {
-      await App.i.settings.setPlace(key, Place(g.lat, g.lon));
-      if (context.mounted) toast(context, '$name guardada');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.pal;
     Widget btn(IconData i, String label, String key) => Expanded(
           child: Tap(
-            onTap: () => _go(context, key, label),
-            onLong: () => _save(context, key, label),
+            onTap: () => goPlace(context, key, label),
+            onLong: () => savePlace(context, key, label),
             child: Container(
               height: 50,
               decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(16)),
@@ -486,7 +410,7 @@ class _Destinations extends StatelessWidget {
         btn(Icons.work_rounded, 'Trabajo', 'work'),
         const SizedBox(width: 8),
         Tap(
-          onTap: () => App.i.openSlot(Slot.nav),
+          onTap: openMapSearch,
           semantics: 'Buscar destino',
           child: Container(
             width: 50,

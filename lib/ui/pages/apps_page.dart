@@ -19,8 +19,7 @@ class AppsPage extends StatefulWidget {
 class _AppsPageState extends State<AppsPage> {
   List<AppEntry> _apps = const [];
   String _q = '';
-  double _bright = 0.7, _vol = 0.5;
-  int _volMax = 15;
+  bool _askedWrite = false, _warnedVol = false;
 
   @override
   void initState() {
@@ -41,29 +40,32 @@ class _AppsPageState extends State<AppsPage> {
 
   Future<void> _load({bool refresh = false}) async {
     final a = await App.i.apps(refresh: refresh);
-    final b = await Native.brightness();
-    final v = await Native.volume();
+    await App.i.loadVolume();
     if (!mounted) return;
-    setState(() {
-      _apps = a;
-      if (b >= 0) _bright = b / 255;
-      _volMax = v.$2 <= 0 ? 15 : v.$2;
-      _vol = v.$1 / _volMax;
-    });
+    setState(() => _apps = a);
   }
 
+  /// El brillo se guarda para el modo actual (día o noche) y se aplica solo al cambiar de modo.
   Future<void> _setBright(double f) async {
-    setState(() => _bright = f);
-    final ok = await Native.setBrightness((f * 255).round());
-    if (!ok && mounted) {
-      toast(context, 'Permití "Modificar ajustes del sistema" para cambiar el brillo');
-      Native.open('write');
+    final save = App.i.setBrightness(f);
+    setState(() {});
+    final how = await save;
+    if (how != 'system' && !_askedWrite && mounted) {
+      _askedWrite = true;
+      toast(context, 'Por ahora solo cambia esta pantalla. Permití "Modificar ajustes del sistema" para toda la radio');
+      if (!await Native.open('write') && mounted) {
+        toast(context, 'La radio no tiene ese permiso: el brillo se aplica solo dentro del launcher');
+      }
     }
   }
 
-  void _setVol(double f) {
-    setState(() => _vol = f);
-    Native.setVolume((f * _volMax).round());
+  Future<void> _setVol(double f) async {
+    final app = App.i;
+    final ok = await app.setVolume((f * app.volume.value.$2).round());
+    if (!ok && !_warnedVol && mounted) {
+      _warnedVol = true;
+      toast(context, 'La radio no dejó cambiar el volumen desde acá: usá la perilla o los botones del volante');
+    }
   }
 
   @override
@@ -96,10 +98,13 @@ class _AppsPageState extends State<AppsPage> {
               c,
               icon: b.connected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded,
               title: 'Bluetooth',
-              sub: b.connected ? b.name! : (b.available && !b.on ? 'Apagado' : 'Sin teléfono'),
-              on: b.connected || b.on,
+              sub: b.known ? b.title : (b.available && !b.on ? 'Apagado' : 'Sin teléfono'),
+              on: b.known || b.on,
               color: c.blue,
-              onTap: () => Native.open('bt'),
+              onTap: () async {
+                // primero la app Bluetooth de la radio; si no hay, los ajustes de Android
+                if (!await Native.launch(app.settings.slot(Slot.music))) await Native.open('bt');
+              },
             ),
           ),
         ),
@@ -122,16 +127,30 @@ class _AppsPageState extends State<AppsPage> {
       const SizedBox(height: 10),
       Expanded(
         child: Row(children: [
-          Expanded(child: _VSlider(value: _bright, icon: Icons.wb_sunny_rounded, label: 'Brillo', gradient: c.accentGradient, onChanged: _setBright)),
+          Expanded(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: App.i.night,
+              builder: (_, n, __) => _VSlider(
+                value: App.i.settings.brightnessFor(n),
+                icon: n ? Icons.nightlight_round : Icons.wb_sunny_rounded,
+                label: n ? 'Brillo noche' : 'Brillo día',
+                gradient: c.accentGradient,
+                onChanged: _setBright,
+              ),
+            ),
+          ),
           const SizedBox(width: 10),
           Expanded(
-            child: _VSlider(
-              value: _vol,
+            child: ValueListenableBuilder<(int, int)>(
+              valueListenable: App.i.volume,
+              builder: (_, v, __) => _VSlider(
+              value: v.$2 == 0 ? 0 : v.$1 / v.$2,
               icon: Icons.volume_up_rounded,
               label: 'Volumen',
               gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [c.text, alpha(c.text, 0.8)]),
               dark: true,
               onChanged: _setVol,
+            ),
             ),
           ),
         ]),
@@ -367,7 +386,7 @@ class _AppsPageState extends State<AppsPage> {
 
   Future<void> _chooseSlot(Slot s) async {
     final r = await pickApp(context, title: 'App para "${s.label}"', current: App.i.settings.slot(s));
-    if (r != null) await App.i.settings.setSlot(s, r.isEmpty ? null : r);
+    if (r != null) await App.i.settings.setSlot(s, r);
   }
 
   /// Toque largo sobre una app: usarla en uno de los accesos.

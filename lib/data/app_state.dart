@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/native.dart';
 import 'maintenance.dart';
 import 'models.dart';
+import 'navigation.dart';
 import 'settings.dart';
 import 'sun.dart';
 import 'weather.dart';
@@ -34,6 +35,7 @@ class App {
   late final Settings settings;
   late final Maint maint;
   late final WeatherRepo _wx;
+  late final Navi navi;
 
   final gps = ValueNotifier<Gps?>(null);
   final trip = ValueNotifier<Trip>(const Trip());
@@ -45,6 +47,9 @@ class App {
   final now = ValueNotifier<DateTime>(DateTime.now());
   final night = ValueNotifier<bool>(true);
   final perms = ValueNotifier<Perms>(const Perms());
+
+  /// Volumen de la música (actual, máximo).
+  final volume = ValueNotifier<(int, int)>((0, 15));
 
   /// La animación del holograma al abrir el launcher (se consume una vez).
   bool introPending = true;
@@ -58,8 +63,12 @@ class App {
   Future<void> init() async {
     sp = await SharedPreferences.getInstance();
     settings = Settings(sp);
+    settings.addListener(() {
+      if (_apps != null) _watchApps();
+    });
     maint = Maint(sp);
     _wx = WeatherRepo(sp);
+    navi = Navi(this);
     weather.value = _wx.cached();
     introPending = settings.intro;
     lat = sp.getDouble('lastLat') ?? defLat;
@@ -113,6 +122,7 @@ class App {
     }, onError: (_) {}));
 
     settings.addListener(_updateNight);
+    night.addListener(() => applyBrightness());
 
     _timers.add(Timer.periodic(const Duration(seconds: 5), (_) => _tick()));
     _timers.add(Timer.periodic(const Duration(minutes: 1), (_) => _slowTick()));
@@ -123,6 +133,7 @@ class App {
 
   Future<void> _tick() async {
     now.value = DateTime.now();
+    loadVolume();
     _updateNight();
     final g = gps.value;
     if (g != null && !g.fresh) gps.value = null;
@@ -185,8 +196,108 @@ class App {
   final _iconWait = <String, Future<Uint8List?>>{};
 
   Future<List<AppEntry>> apps({bool refresh = false}) async {
-    if (_apps == null || refresh) _apps = await Native.apps();
+    if (_apps == null || refresh) {
+      _apps = await Native.apps();
+      _autodetect(_apps!);
+    }
     return _apps!;
+  }
+
+  /// Busca solas las apps de Bluetooth, radio, USB, teléfono y ecualizador de la radio.
+  void _autodetect(List<AppEntry> list) {
+    if (list.isEmpty) return;
+    final pkgs = {for (final a in list) a.pkg};
+    final found = <Slot, String>{};
+    for (final s in Slot.values) {
+      final known = autoPackages[s] ?? const <String>[];
+      final byPkg = known.where(pkgs.contains);
+      if (byPkg.isNotEmpty) {
+        found[s] = byPkg.first;
+        continue;
+      }
+      final re = autoLabels[s];
+      if (re == null) continue;
+      for (final a in list) {
+        if (re.hasMatch(a.label.trim())) {
+          found[s] = a.pkg;
+          break;
+        }
+      }
+    }
+    settings.setAuto(found);
+    _watchApps();
+  }
+
+  void _watchApps() {
+    final w = <String>{...autoPackages[Slot.music]!};
+    for (final s in [Slot.music, Slot.phone, Slot.radio]) {
+      final p = settings.slot(s);
+      if (p != null) w.add(p);
+    }
+    Native.watch(w.toList());
+  }
+
+  /* ------------------------------------------------ brillo por modo */
+
+  String lastBrightness = '';
+
+  Future<String> applyBrightness() async {
+    final v = settings.brightnessFor(night.value);
+    lastBrightness = await Native.setBrightness((v * 255).round());
+    return lastBrightness;
+  }
+
+  Future<String> setBrightness(double v) async {
+    settings.setBrightnessFor(night.value, v); // el valor queda en memoria al instante
+    lastBrightness = await Native.setBrightness((v * 255).round());
+    return lastBrightness;
+  }
+
+  /* ------------------------------------------------ volumen */
+
+  Future<void> loadVolume() async {
+    final v = await Native.volume();
+    if (v.$2 > 0) volume.value = v;
+  }
+
+  /// Cambia el volumen. Devuelve false si la radio no lo aceptó (lo maneja su perilla).
+  Future<bool> setVolume(int v) async {
+    final max = volume.value.$2;
+    final want = v.clamp(0, max).toInt();
+    volume.value = (want, max);
+    final got = await Native.setVolume(want);
+    if (got == null) return false;
+    volume.value = (got, max);
+    return got == want;
+  }
+
+  Future<bool> stepVolume(int dir) async {
+    final before = volume.value.$1;
+    final r = await Native.volumeStep(dir);
+    if (r == null) return false;
+    volume.value = r;
+    return r.$1 != before || (dir > 0 ? r.$1 == r.$2 : r.$1 == 0);
+  }
+
+  /* ------------------------------------------------ reproducir */
+
+  /// Play/pausa de una fuente. Si esa app no tiene sesión (no está abierta), la abre
+  /// para que empiece a sonar y vuelve al launcher.
+  Future<String> playSource(Slot s, {Session? session}) async {
+    final pkg = session?.pkg ?? settings.slot(s);
+    final has = session != null || media.value.forPkg(pkg) != null;
+    if (has || pkg == null) {
+      await Native.media('toggle', pkg: pkg);
+      return pkg == null ? 'Elegí la app de ${s.label} (mantené apretada su pestaña)' : '';
+    }
+    final ok = settings.returnAfterLaunch ? await Native.launchReturn(pkg) : await Native.launch(pkg);
+    if (!ok) return 'No se pudo abrir ${labelOf(pkg)}';
+    // por si la app abre en pausa: después de volver le manda play
+    Future.delayed(const Duration(milliseconds: 3500), () {
+      final ses = media.value.forPkg(pkg);
+      if (ses != null && !ses.playing) Native.media('play', pkg: pkg);
+    });
+    return '';
   }
 
   String labelOf(String? pkg) {

@@ -67,6 +67,17 @@ flutter build apk --release
   - Límite de velocidad.
   - Los 4 accesos de la barra y todas las apps con buscador. Toque largo en una app la asigna a un botón.
 
+## Cambios 4.1 (después de la primera prueba)
+
+- **Mapa dentro del launcher**: buscador, ruta dibujada, próximo giro y recálculo si te salís. Casa y Trabajo arman la ruta sin salir. Con toque largo en el mapa elegís un punto. «Abrir en Maps» queda como opción.
+- **Día / Noche** en la barra lateral (Auto › Noche › Día). Cada modo guarda su propio brillo.
+- **Brillo**: si la radio no da el permiso, cambia al menos el brillo del launcher y avisa una sola vez.
+- **Volumen**: botones − / + y el valor que quedó de verdad. Si la radio no lo acepta, avisa.
+- **Radio y Bluetooth**: las apps se detectan solas (com.tw.bt, com.syu.bt, com.microntek…). Si tocás play y la app no está abierta, la abre para que suene y vuelve al inicio.
+- **A qué se conectó**: si Android no ve el teléfono, se muestra el aviso de la app Bluetooth de la radio.
+- **Diagnóstico** (Ajustes › Diagnóstico): qué sesiones de música se ven, y botones para probar los 6 modos de play/siguiente y elegir el que funciona.
+- **Prueba automática**: cada compilación se prueba en un emulador de 1024×600. Las capturas quedan en Artifacts › `pruebas-emulador` y en la rama `apk`.
+
 ## Límites conocidos
 
 - **Radio FM**: Android no tiene un sistema estándar para sintonizar. La sintonía la hace la app de radio de la pantalla.

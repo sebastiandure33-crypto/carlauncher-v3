@@ -117,10 +117,12 @@ class SettingsPage extends StatelessWidget {
                       _Row(
                         leading: AppIcon(s.slot(sl), size: 40),
                         title: sl.label,
-                        sub: s.slot(sl) == null ? 'Sin elegir' : app.labelOf(s.slot(sl)),
+                        sub: s.slot(sl) == null
+                            ? 'Sin elegir'
+                            : app.labelOf(s.slot(sl)) + (s.slotIsAuto(sl) ? ' · detectada sola' : ''),
                         onTap: () async {
                           final r = await pickApp(ctx, title: 'App para "${sl.label}"', current: s.slot(sl));
-                          if (r != null) await s.setSlot(sl, r.isEmpty ? null : r);
+                          if (r != null) await s.setSlot(sl, r);
                         },
                       ),
                   ]),
@@ -159,6 +161,21 @@ class SettingsPage extends StatelessWidget {
                         );
                         if (v != null) s.mediaMode = v;
                       },
+                    ),
+                    _Switch(
+                      icon: Icons.replay_rounded,
+                      title: 'Al tocar play, abrir la app y volver',
+                      sub: 'Si la radio o el Bluetooth no están abiertos, los abre para que suenen y vuelve al inicio',
+                      value: s.returnAfterLaunch,
+                      onChanged: (v) => s.returnAfterLaunch = v,
+                    ),
+                  ]),
+                  _Section('Diagnóstico', [
+                    _Row(
+                      icon: Icons.troubleshoot_rounded,
+                      title: 'Revisar música, Bluetooth, volumen y brillo',
+                      sub: 'Muestra qué ve la app y permite probar cada modo de los botones',
+                      onTap: () => Navigator.of(ctx).push(MaterialPageRoute(builder: (_) => const DiagPage())),
                     ),
                   ]),
                   _Section('Viaje', [
@@ -254,6 +271,141 @@ class _Switch extends StatelessWidget {
       sub: sub,
       onTap: () => onChanged(!value),
       trailing: Switch(value: value, onChanged: onChanged, activeColor: c.onAccent, activeTrackColor: c.accent),
+    );
+  }
+}
+
+
+/// Diagnóstico: qué sesiones de música ve la app, Bluetooth, volumen y brillo,
+/// y botones para probar cada modo de envío de play / siguiente.
+class DiagPage extends StatefulWidget {
+  const DiagPage({super.key});
+  @override
+  State<DiagPage> createState() => _DiagPageState();
+}
+
+class _DiagPageState extends State<DiagPage> {
+  List<String> _lines = const [];
+  String _result = '';
+  Slot _target = Slot.music;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final l = await Native.diag();
+    final s = App.i.settings;
+    final extra = [
+      '— Apps elegidas —',
+      for (final sl in Slot.values) '${sl.label}: ${s.slot(sl) ?? 'sin elegir'}${s.slotIsAuto(sl) ? ' (detectada)' : ''}',
+    ];
+    if (mounted) setState(() => _lines = [...l, ...extra]);
+  }
+
+  Future<void> _test(String cmd, int mode) async {
+    final pkg = App.i.settings.slot(_target);
+    final r = await Native.mediaTest(cmd, mode, pkg);
+    if (!mounted) return;
+    setState(() => _result = 'Modo ${mode + 1} · $cmd → $r');
+    Future.delayed(const Duration(milliseconds: 800), _refresh);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.pal;
+    return Scaffold(
+      backgroundColor: c.ground,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            RoundBtn(icon: Icons.arrow_back_rounded, label: 'Volver', size: 50, onTap: () => Navigator.pop(context)),
+            const SizedBox(width: 14),
+            Text('Diagnóstico', style: ts(26, w: FontWeight.w700, c: c.text)),
+            const Spacer(),
+            Pill(text: 'Actualizar', icon: Icons.refresh_rounded, onTap: _refresh),
+          ]),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(
+                flex: 6,
+                child: Glass(
+                  color: c.panelSolid,
+                  child: ListView(children: [
+                    for (final l in _lines)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Text(l, style: ts(l.startsWith('—') ? 15 : 14, w: l.startsWith('—') ? FontWeight.w700 : FontWeight.w500, c: l.startsWith('—') ? c.accent : c.text2)),
+                      ),
+                  ]),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 5,
+                child: Glass(
+                  color: c.panelSolid,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    const Label('Probar botones en'),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      for (final sl in const [Slot.music, Slot.radio, Slot.usb]) ...[
+                        Expanded(
+                          child: Tap(
+                            onTap: () => setState(() => _target = sl),
+                            child: Container(
+                              height: 44,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _target == sl ? c.text : c.chip,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(sl.label, style: ts(14, w: FontWeight.w700, c: _target == sl ? c.ground : c.text2)),
+                            ),
+                          ),
+                        ),
+                        if (sl != Slot.usb) const SizedBox(width: 6),
+                      ],
+                    ]),
+                    const SizedBox(height: 10),
+                    Text('Poné música y probá: el modo que pausa o cambia de tema es el que hay que elegir.',
+                        style: ts(13, c: c.muted)),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView(children: [
+                        for (var m = 0; m < Settings.mediaModes.length; m++)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(children: [
+                              Expanded(
+                                child: Text('${m + 1}. ${Settings.mediaModes[m]}',
+                                    style: ts(14, w: m == App.i.settings.mediaMode ? FontWeight.w700 : FontWeight.w500, c: m == App.i.settings.mediaMode ? c.accent : c.text)),
+                              ),
+                              RoundBtn(icon: Icons.play_arrow_rounded, label: 'Play/pausa modo ${m + 1}', size: 42, onTap: () => _test('toggle', m)),
+                              const SizedBox(width: 6),
+                              RoundBtn(icon: Icons.skip_next_rounded, label: 'Siguiente modo ${m + 1}', size: 42, onTap: () => _test('next', m)),
+                              const SizedBox(width: 6),
+                              Pill(
+                                text: 'Usar',
+                                height: 42,
+                                onTap: () => setState(() => App.i.settings.mediaMode = m),
+                              ),
+                            ]),
+                          ),
+                      ]),
+                    ),
+                    if (_result.isNotEmpty) Text(_result, style: ts(13, w: FontWeight.w600, c: c.text2)),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
     );
   }
 }

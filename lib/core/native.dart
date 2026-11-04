@@ -65,9 +65,33 @@ class Native {
     return ((r?['cur'] as int?) ?? 0, (r?['max'] as int?) ?? 15);
   }
 
-  static Future<void> setVolume(int v) => _call('setVolume', {'v': v});
+  /// Devuelve el volumen que quedó realmente (la radio puede ignorar el cambio).
+  static Future<int?> setVolume(int v) => _call<int>('setVolume', {'v': v});
+
+  /// Sube (+1) o baja (-1) un paso, como las teclas de volumen.
+  static Future<(int, int)?> volumeStep(int dir) async {
+    final r = await _call<Map<Object?, Object?>>('volumeStep', {'dir': dir});
+    if (r == null) return null;
+    return ((r['cur'] as int?) ?? 0, (r['max'] as int?) ?? 15);
+  }
+
   static Future<int> brightness() async => (await _call<int>('brightness')) ?? -1;
-  static Future<bool> setBrightness(int v) => _bool('setBrightness', {'v': v});
+
+  /// "system" (toda la radio), "window" (solo el launcher, falta permiso) o "none".
+  static Future<String> setBrightness(int v) async => (await _call<String>('setBrightness', {'v': v})) ?? 'none';
+
+  /// Abre la app y a los [delayMs] vuelve al launcher (el audio sigue de fondo).
+  static Future<bool> launchReturn(String? pkg, {int delayMs = 2000}) =>
+      pkg == null ? Future.value(false) : _bool('launchReturn', {'pkg': pkg, 'delay': delayMs});
+
+  static Future<List<String>> diag() async => [for (final e in (await _call<List<Object?>>('diag')) ?? const []) '$e'];
+
+  /// Prueba un botón de música con un modo puntual. Devuelve por dónde salió.
+  static Future<String> mediaTest(String cmd, int mode, String? pkg) async =>
+      (await _call<String>('mediaTest', {'cmd': cmd, 'mode': mode, 'pkg': pkg})) ?? '—';
+
+  /// Apps cuyo aviso se lee (para saber a qué teléfono se conectó la radio).
+  static Future<void> watch(List<String> pkgs) => _call('watch', {'pkgs': pkgs});
   static Future<Map<Object?, Object?>?> btInfo() => _call<Map<Object?, Object?>>('btInfo');
   static Future<Map<Object?, Object?>?> wifiInfo() => _call<Map<Object?, Object?>>('wifiInfo');
   static Future<String?> filesDir() => _call<String>('filesDir');

@@ -88,11 +88,20 @@ class NavInfo {
 }
 
 class BtInfo {
-  const BtInfo({this.available = false, this.on = false, this.name, this.audio = false, this.calls = false, this.battery = -1});
+  const BtInfo({this.available = false, this.on = false, this.name, this.audio = false, this.calls = false, this.battery = -1, this.appText});
   final bool available, on, audio, calls;
   final String? name;
   final int battery;
+
+  /// Aviso de la app Bluetooth propia de la radio (cuando Android no ve el teléfono).
+  final String? appText;
+
   bool get connected => name != null && name!.isNotEmpty;
+
+  /// Hay algo que mostrar sobre la conexión (Android o la app de la radio).
+  bool get known => connected || (appText != null && appText!.isNotEmpty);
+
+  String get title => connected ? name! : (appText?.split(' · ').first ?? 'Bluetooth de la radio');
 
   factory BtInfo.from(Map m) => BtInfo(
         available: m['available'] as bool? ?? false,
@@ -101,6 +110,7 @@ class BtInfo {
         audio: m['audio'] as bool? ?? false,
         calls: m['calls'] as bool? ?? false,
         battery: (m['battery'] as num?)?.toInt() ?? -1,
+        appText: m['appText'] as String?,
       );
 }
 

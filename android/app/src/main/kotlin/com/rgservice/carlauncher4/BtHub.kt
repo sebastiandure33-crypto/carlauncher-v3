@@ -61,6 +61,17 @@ class BtHub private constructor(private val ctx: Context) {
         schedule()
     }
 
+    @Volatile private var appPkg: String? = null
+    @Volatile private var appText: String? = null
+
+    /** Texto del aviso de la app Bluetooth de la radio (ej.: "Conectado a Galaxy de Seba"). */
+    fun appStatus(pkg: String, text: String?) {
+        if (text == null && pkg != appPkg) return
+        appPkg = pkg
+        appText = text
+        schedule()
+    }
+
     private val pushTask = Runnable { live.set(info()) }
     private fun schedule() {
         h.removeCallbacks(pushTask)
@@ -83,6 +94,8 @@ class BtHub private constructor(private val ctx: Context) {
             "audio" to (d != null && audio.any { it.address == d.address }),
             "calls" to (d != null && calls.any { it.address == d.address }),
             "battery" to battery,
+            "appPkg" to appPkg,
+            "appText" to appText,
         )
     }
 

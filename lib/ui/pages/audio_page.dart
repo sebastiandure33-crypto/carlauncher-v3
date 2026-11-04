@@ -37,7 +37,7 @@ class _AudioPageState extends State<AudioPage> {
 
   Future<void> _chooseSlot(Slot s) async {
     final r = await pickApp(context, title: 'App para "${s.label}"', current: App.i.settings.slot(s));
-    if (r != null) await App.i.settings.setSlot(s, r.isEmpty ? null : r);
+    if (r != null) await App.i.settings.setSlot(s, r);
   }
 
   List<Color> _bg(AudioSource s) => switch (s) {
@@ -97,6 +97,7 @@ class _AudioPageState extends State<AudioPage> {
                               child: _Player(
                                 session: s,
                                 pkg: pkg,
+                                slot: slot,
                                 sourceLabel: slot == null ? null : slot.label,
                                 onChoose: slot == null ? null : () => _chooseSlot(slot),
                               ),
@@ -202,74 +203,67 @@ class _VolumeBar extends StatefulWidget {
 }
 
 class _VolumeBarState extends State<_VolumeBar> {
-  int cur = 0, max = 15;
+  bool _warned = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-    shellTab.addListener(_load);
+  Future<void> _set(double f) async {
+    final app = App.i;
+    final v = (f * app.volume.value.$2).round();
+    if (v == app.volume.value.$1) return;
+    final ok = await app.setVolume(v);
+    if (!ok) _warn();
   }
 
-  @override
-  void dispose() {
-    shellTab.removeListener(_load);
-    super.dispose();
+  Future<void> _step(int dir) async {
+    if (!await App.i.stepVolume(dir)) _warn();
   }
 
-  Future<void> _load() async {
-    final v = await Native.volume();
-    if (mounted) {
-      setState(() {
-        cur = v.$1;
-        max = v.$2;
-      });
-    }
-  }
-
-  void _set(double f) {
-    final v = (f * max).round().clamp(0, max).toInt();
-    if (v != cur) {
-      setState(() => cur = v);
-      Native.setVolume(v);
-    }
+  void _warn() {
+    if (_warned || !mounted) return;
+    _warned = true;
+    toast(context, 'La radio no dejó cambiar el volumen desde acá: usá la perilla o los botones del volante');
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.pal;
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.line)),
-      child: Row(children: [
-        Icon(cur == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: c.text2, size: 20),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 150,
-          child: LayoutBuilder(
-            builder: (_, b) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (d) => _set(d.localPosition.dx / b.maxWidth),
-              onHorizontalDragUpdate: (d) => _set((d.localPosition.dx / b.maxWidth).clamp(0.0, 1.0)),
-              child: SizedBox(
-                height: 40,
-                child: Center(
-                  child: Stack(children: [
-                    Container(height: 6, decoration: BoxDecoration(color: alpha(c.text, 0.14), borderRadius: BorderRadius.circular(3))),
-                    FractionallySizedBox(
-                      widthFactor: max == 0 ? 0 : cur / max,
-                      child: Container(height: 6, decoration: BoxDecoration(color: c.text, borderRadius: BorderRadius.circular(3))),
+    return ValueListenableBuilder<(int, int)>(
+      valueListenable: App.i.volume,
+      builder: (_, v, __) {
+        final (cur, max) = v;
+        return Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(color: c.field, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.line)),
+          child: Row(children: [
+            RoundBtn(icon: Icons.volume_down_rounded, label: 'Bajar volumen', size: 40, bg: Colors.transparent, onTap: () => _step(-1)),
+            SizedBox(
+              width: 130,
+              child: LayoutBuilder(
+                builder: (_, b) => GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (d) => _set((d.localPosition.dx / b.maxWidth).clamp(0.0, 1.0)),
+                  onHorizontalDragEnd: (_) {},
+                  onHorizontalDragUpdate: (d) => _set((d.localPosition.dx / b.maxWidth).clamp(0.0, 1.0)),
+                  child: SizedBox(
+                    height: 40,
+                    child: Center(
+                      child: Stack(children: [
+                        Container(height: 6, decoration: BoxDecoration(color: alpha(c.text, 0.14), borderRadius: BorderRadius.circular(3))),
+                        FractionallySizedBox(
+                          widthFactor: max == 0 ? 0 : (cur / max).clamp(0.0, 1.0),
+                          child: Container(height: 6, decoration: BoxDecoration(color: c.text, borderRadius: BorderRadius.circular(3))),
+                        ),
+                      ]),
                     ),
-                  ]),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        SizedBox(width: 22, child: Text('$cur', style: ts(14, w: FontWeight.w700, c: c.text2))),
-      ]),
+            RoundBtn(icon: Icons.volume_up_rounded, label: 'Subir volumen', size: 40, bg: Colors.transparent, onTap: () => _step(1)),
+            SizedBox(width: 24, child: Text('$cur', style: ts(14, w: FontWeight.w700, c: c.text2))),
+          ]),
+        );
+      },
     );
   }
 }
@@ -277,7 +271,8 @@ class _VolumeBarState extends State<_VolumeBar> {
 /* ------------------------------------------------------------ reproductor */
 
 class _Player extends StatelessWidget {
-  const _Player({required this.session, required this.pkg, this.sourceLabel, this.onChoose});
+  const _Player({required this.session, required this.pkg, this.slot, this.sourceLabel, this.onChoose});
+  final Slot? slot;
   final Session? session;
   final String? pkg;
   final String? sourceLabel;
@@ -366,7 +361,14 @@ class _Player extends StatelessWidget {
                 bg: c.text,
                 fg: c.ground,
                 glow: alpha(const Color(0xFFFFC896), c.dark ? 0.35 : 0.2),
-                onTap: () => Native.media('toggle', pkg: target),
+                onTap: () async {
+                  if (slot == null) {
+                    await Native.media('toggle', pkg: target);
+                    return;
+                  }
+                  final msg = await App.i.playSource(slot!, session: s);
+                  if (msg.isNotEmpty && context.mounted) toast(context, msg);
+                },
               ),
               RoundBtn(icon: Icons.skip_next_rounded, label: 'Siguiente', size: 62, onTap: () => Native.media('next', pkg: target)),
             ]),
@@ -393,8 +395,8 @@ class _PhoneCard extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Ring(
-              value: b.battery >= 0 ? b.battery / 100 : (b.connected ? 1 : 0),
-              color: b.connected ? c.green : c.muted,
+              value: b.battery >= 0 ? b.battery / 100 : (b.known ? 1 : 0),
+              color: b.known ? c.green : c.muted,
               size: 58,
               stroke: 5,
               child: Icon(Icons.smartphone_rounded, color: c.text, size: 24),
@@ -402,13 +404,17 @@ class _PhoneCard extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(b.connected ? b.name! : 'Bluetooth de la radio',
+                Text(b.title,
                     maxLines: 1, overflow: TextOverflow.ellipsis, style: ts(16, w: FontWeight.w700, c: c.text)),
                 Text(
                   b.connected
                       ? (b.battery >= 0 ? 'Conectado · batería ${b.battery}%' : 'Conectado')
-                      : (b.available && !b.on ? 'Bluetooth apagado' : 'Se maneja desde su app'),
-                  style: ts(13, w: FontWeight.w600, c: b.connected ? c.green : c.muted),
+                      : b.known
+                          ? (b.appText!.contains(' · ') ? b.appText!.split(' · ').skip(1).join(' · ') : 'Bluetooth de la radio')
+                          : (b.available && !b.on ? 'Bluetooth apagado' : 'Sin datos: abrí la app Bluetooth de la radio'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: ts(13, w: FontWeight.w600, c: b.known ? c.green : c.muted),
                 ),
               ]),
             ),
@@ -574,7 +580,10 @@ class _RadioView extends StatelessWidget {
             size: 64,
             bg: c.text,
             fg: c.ground,
-            onTap: () => Native.media('toggle', pkg: pkg),
+            onTap: () async {
+              final msg = await App.i.playSource(Slot.radio, session: s);
+              if (msg.isNotEmpty && context.mounted) toast(context, msg);
+            },
           ),
           const SizedBox(width: 16),
           Pill(

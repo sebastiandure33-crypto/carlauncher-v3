@@ -12,10 +12,12 @@ import android.media.AudioManager
 import android.media.audiofx.AudioEffect
 import android.net.Uri
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.BinaryMessenger
@@ -123,23 +125,38 @@ class MainActivity : FlutterActivity() {
                 res.success(mapOf("cur" to am.getStreamVolume(AudioManager.STREAM_MUSIC), "max" to am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)))
             }
             "setVolume" -> {
+                // FLAG_SHOW_UI: en muchas radios el cambio pasa por el panel de volumen del fabricante
                 val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-                try { am.setStreamVolume(AudioManager.STREAM_MUSIC, (a["v"] as Number).toInt(), 0) } catch (e: Exception) { }
-                res.success(null)
+                val v = (a["v"] as Number).toInt()
+                try { am.setStreamVolume(AudioManager.STREAM_MUSIC, v, AudioManager.FLAG_SHOW_UI) } catch (e: Exception) { }
+                res.success(am.getStreamVolume(AudioManager.STREAM_MUSIC))
+            }
+            "volumeStep" -> {
+                val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val dir = if ((a["dir"] as Number).toInt() > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
+                try {
+                    am.adjustSuggestedStreamVolume(dir, AudioManager.USE_DEFAULT_STREAM_TYPE, AudioManager.FLAG_SHOW_UI)
+                } catch (e: Exception) {
+                    try { am.adjustStreamVolume(AudioManager.STREAM_MUSIC, dir, AudioManager.FLAG_SHOW_UI) } catch (e2: Exception) { }
+                }
+                main.postDelayed({
+                    res.success(mapOf("cur" to am.getStreamVolume(AudioManager.STREAM_MUSIC), "max" to am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)))
+                }, 150)
             }
             "brightness" -> res.success(
                 try { Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) } catch (e: Exception) { -1 },
             )
-            "setBrightness" -> {
-                if (!Settings.System.canWrite(this)) {
-                    res.success(false)
-                } else {
-                    try {
-                        Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
-                        Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, (a["v"] as Number).toInt().coerceIn(5, 255))
-                        res.success(true)
-                    } catch (e: Exception) { res.success(false) }
-                }
+            "setBrightness" -> res.success(setBrightness((a["v"] as Number).toInt().coerceIn(5, 255)))
+            "launchReturn" -> res.success(launchReturn(a["pkg"] as String?, (a["delay"] as? Number)?.toLong() ?: 2000L))
+            "diag" -> res.success(diagnostics())
+            "mediaTest" -> {
+                media.command(a["cmd"] as String, a["pkg"] as String?, null, (a["mode"] as Number).toInt())
+                res.success(media.lastRoute)
+            }
+            "watch" -> {
+                @Suppress("UNCHECKED_CAST")
+                CarNotificationListener.watch = ((a["pkgs"] as? List<String>) ?: emptyList()).toSet()
+                res.success(null)
             }
             "btInfo" -> res.success(bt.info())
             "wifiInfo" -> {
@@ -207,6 +224,66 @@ class MainActivity : FlutterActivity() {
             startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             true
         } catch (e: Exception) { false }
+    }
+
+    /**
+     * Brillo: si hay permiso cambia el de todo el sistema (y la ventana sigue al sistema);
+     * si no, cambia al menos el de esta pantalla. Devuelve "system", "window" o "none".
+     */
+    private fun setBrightness(v: Int): String {
+        var mode = "window"
+        if (Settings.System.canWrite(this)) {
+            try {
+                Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+                Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, v)
+                mode = "system"
+            } catch (e: Exception) { }
+        }
+        return try {
+            val lp = window.attributes
+            lp.screenBrightness = if (mode == "system") WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE else v / 255f
+            window.attributes = lp
+            mode
+        } catch (e: Exception) { if (mode == "system") mode else "none" }
+    }
+
+    /**
+     * Abre una app (radio, música Bluetooth) para que empiece a sonar y a los [delay] ms
+     * vuelve al launcher, así el audio sigue de fondo sin perder la pantalla de inicio.
+     */
+    private fun launchReturn(pkg: String?, delay: Long): Boolean {
+        if (!launch(pkg)) return false
+        main.postDelayed({
+            try {
+                val back = Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                startActivity(back)
+            } catch (e: Exception) { }
+        }, delay.coerceIn(500L, 8000L))
+        return true
+    }
+
+    private fun diagnostics(): List<String> {
+        val out = ArrayList<String>()
+        out += "— Música —"
+        out += media.diagnostics()
+        out += "— Bluetooth —"
+        val b = bt.info()
+        out += "Bluetooth de Android: " + when {
+            b["available"] != true -> "no existe (la radio usa su propio Bluetooth)"
+            b["on"] != true -> "apagado"
+            b["name"] == null -> "prendido, sin teléfono conectado"
+            else -> "conectado a ${b["name"]}"
+        }
+        out += "Aviso de la app Bluetooth: " + ((b["appText"] as? String)?.takeIf { it.isNotBlank() } ?: "ninguno")
+        out += "Apps vigiladas: " + CarNotificationListener.watch.joinToString().ifEmpty { "ninguna" }
+        out += "— Volumen y brillo —"
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        out += "Volumen música: ${am.getStreamVolume(AudioManager.STREAM_MUSIC)} de ${am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}"
+        out += "Permiso de brillo: " + if (Settings.System.canWrite(this)) "sí" else "NO (solo cambia esta pantalla)"
+        out += "Brillo del sistema: " + try { Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) } catch (e: Exception) { "?" }
+        out += "Android ${Build.VERSION.RELEASE} · ${Build.MANUFACTURER} ${Build.MODEL} · ${Build.DISPLAY}"
+        return out
     }
 
     private fun start(i: Intent): Boolean = try {

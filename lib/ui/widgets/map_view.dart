@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' show Point;
 import 'dart:typed_data';
@@ -12,14 +13,18 @@ import 'package:latlong2/latlong.dart';
 import '../../core/theme.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
+import '../../data/navigation.dart';
 
 /// Mapa de calles (OpenStreetMap). Las calles se bajan solo con internet y quedan
 /// guardadas en la radio, así después se ven sin conexión.
 class CarMap extends StatefulWidget {
-  const CarMap({super.key, required this.padding});
+  const CarMap({super.key, required this.padding, this.onLongPress});
 
   /// Espacio que tapan los paneles (para centrar el auto en la parte libre).
   final EdgeInsets padding;
+
+  /// Toque largo sobre el mapa (para "ir acá").
+  final ValueChanged<LatLng>? onLongPress;
 
   @override
   State<CarMap> createState() => _CarMapState();
@@ -32,16 +37,44 @@ class _CarMapState extends State<CarMap> {
   double _zoom = 16;
   late final _tiles = _CachedTiles('${App.i.filesDir ?? Directory.systemTemp.path}/tiles');
 
+  NavState? _lastRoute;
+  Timer? _resume;
+
   @override
   void initState() {
     super.initState();
     App.i.gps.addListener(_onGps);
+    App.i.navi.state.addListener(_onRoute);
   }
 
   @override
   void dispose() {
     App.i.gps.removeListener(_onGps);
+    App.i.navi.state.removeListener(_onRoute);
+    _resume?.cancel();
     super.dispose();
+  }
+
+  /// Ruta nueva: muestra el recorrido completo unos segundos y vuelve a seguir al auto.
+  void _onRoute() {
+    final r = App.i.navi.state.value;
+    final isNew = r != null && (_lastRoute == null || _lastRoute!.line != r.line);
+    _lastRoute = r;
+    if (!isNew || !_ready || r.line.length < 2) return;
+    try {
+      _ctrl.fitCamera(CameraFit.coordinates(
+        coordinates: [...r.line, _here],
+        padding: widget.padding + const EdgeInsets.all(40),
+      ));
+      if (mounted) setState(() => _follow = false);
+      _resume?.cancel();
+      _resume = Timer(const Duration(seconds: 6), () {
+        if (!mounted) return;
+        setState(() => _follow = true);
+        _zoom = 16;
+        _center();
+      });
+    } catch (_) {}
   }
 
   LatLng get _here {
@@ -92,8 +125,10 @@ class _CarMapState extends State<CarMap> {
             },
             onPositionChanged: (cam, gesture) {
               _zoom = cam.zoom;
+              if (gesture) _resume?.cancel();
               if (gesture && _follow) setState(() => _follow = false);
             },
+            onLongPress: widget.onLongPress == null ? null : (_, p) => widget.onLongPress!(p),
           ),
           children: [
             TileLayer(
@@ -103,6 +138,35 @@ class _CarMapState extends State<CarMap> {
               maxNativeZoom: 19,
               tileBuilder: c.dark ? darkModeTileBuilder : null,
               evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
+            ),
+            ValueListenableBuilder<NavState?>(
+              valueListenable: App.i.navi.state,
+              builder: (_, r, __) => r == null
+                  ? const SizedBox.shrink()
+                  : PolylineLayer(polylines: [
+                      Polyline(points: r.line, strokeWidth: 12, color: alpha(c.accent, 0.30)),
+                      Polyline(
+                        points: r.line,
+                        strokeWidth: 6,
+                        color: c.accent,
+                        borderStrokeWidth: 2,
+                        borderColor: alpha(c.dark ? Colors.black : Colors.white, 0.6),
+                      ),
+                    ]),
+            ),
+            ValueListenableBuilder<NavState?>(
+              valueListenable: App.i.navi.state,
+              builder: (_, r, __) => r == null
+                  ? const SizedBox.shrink()
+                  : MarkerLayer(markers: [
+                      Marker(
+                        point: r.dest,
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.topCenter,
+                        child: Icon(Icons.location_on_rounded, size: 44, color: c.red),
+                      ),
+                    ]),
             ),
             ValueListenableBuilder<Gps?>(
               valueListenable: App.i.gps,

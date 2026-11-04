@@ -9,10 +9,11 @@ import 'pages/apps_page.dart';
 import 'pages/audio_page.dart';
 import 'pages/home_page.dart';
 import 'pages/maint_page.dart';
+import 'pages/map_page.dart';
 import 'widgets/common.dart';
 import 'widgets/dialogs.dart';
 
-/// Pestaña visible (0 inicio, 1 audio, 2 auto, 3 apps).
+/// Pestaña visible (0 inicio, 1 audio, 2 auto, 3 apps, 4 mapa).
 final shellTab = ValueNotifier<int>(0);
 
 /// Fuente elegida en la pantalla de audio.
@@ -76,7 +77,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
               builder: (_, tab, __) => IndexedStack(
                 index: tab,
                 sizing: StackFit.expand,
-                children: const [HomePage(), AudioPage(), MaintPage(), AppsPage()],
+                children: const [HomePage(), AudioPage(), MaintPage(), AppsPage(), MapPage()],
               ),
             ),
           ),
@@ -120,9 +121,8 @@ class _Rail extends StatelessWidget {
                 _RailItem(
                   icon: Icons.map_rounded,
                   label: 'Mapa',
-                  onTap: () async {
-                    if (!await app.openSlot(Slot.nav) && context.mounted) toast(context, 'Elegí la app de mapas (mantené apretado)');
-                  },
+                  active: tab == 4,
+                  onTap: () => shellTab.value = 4,
                   onLong: () => _choose(context, Slot.nav),
                 ),
                 _RailItem(icon: Icons.music_note_rounded, label: 'Audio', active: tab == 1, onTap: () => shellTab.value = 1),
@@ -146,6 +146,8 @@ class _Rail extends StatelessWidget {
             ),
           ),
         ),
+        const _ThemeButton(),
+        const SizedBox(height: 6),
         ValueListenableBuilder<BtInfo>(
           valueListenable: app.bt,
           builder: (_, b, __) => Tap(
@@ -160,15 +162,15 @@ class _Rail extends StatelessWidget {
                 border: Border.all(color: alpha(c.blue, 0.22)),
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(b.connected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded, color: c.blue, size: 20),
+                Icon(b.known ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded, color: c.blue, size: 20),
                 const SizedBox(width: 6),
                 Container(
                   width: 7,
                   height: 7,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: b.connected ? c.green : c.muted,
-                    boxShadow: b.connected ? [BoxShadow(color: c.green, blurRadius: 8)] : null,
+                    color: b.known ? c.green : c.muted,
+                    boxShadow: b.known ? [BoxShadow(color: c.green, blurRadius: 8)] : null,
                   ),
                 ),
               ]),
@@ -181,7 +183,41 @@ class _Rail extends StatelessWidget {
 
   static Future<void> _choose(BuildContext context, Slot s) async {
     final r = await pickApp(context, title: 'App para "${s.label}"', current: App.i.settings.slot(s));
-    if (r != null) await App.i.settings.setSlot(s, r.isEmpty ? null : r);
+    if (r != null) await App.i.settings.setSlot(s, r);
+  }
+}
+
+/// Botón Día / Noche / Auto (como el de la barra del Car Launcher 3).
+class _ThemeButton extends StatelessWidget {
+  const _ThemeButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.pal;
+    final app = App.i;
+    return ListenableBuilder(
+      listenable: Listenable.merge([app.settings, app.night]),
+      builder: (_, __) {
+        final m = app.settings.theme;
+        final label = switch (m) { ThemeModeX.auto => 'Auto', ThemeModeX.night => 'Noche', ThemeModeX.day => 'Día' };
+        return Tap(
+          onTap: () {
+            app.settings.theme = ThemeModeX.values[(m.index + 1) % ThemeModeX.values.length];
+          },
+          semantics: 'Modo $label',
+          child: Container(
+            width: 64,
+            height: 48,
+            decoration: BoxDecoration(color: c.chip, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.line)),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(app.night.value ? Icons.nightlight_round : Icons.wb_sunny_rounded, size: 18, color: c.accentHi),
+              const SizedBox(height: 1),
+              Text(label, style: ts(11, w: FontWeight.w700, c: c.text2)),
+            ]),
+          ),
+        );
+      },
+    );
   }
 }
 

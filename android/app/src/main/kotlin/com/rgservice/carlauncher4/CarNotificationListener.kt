@@ -18,9 +18,18 @@ class CarNotificationListener : NotificationListenerService() {
         )
         private val DIST = Regex("""(\d+(?:[.,]\d+)?)\s?(km|m|mi|ft|yd)\b""", RegexOption.IGNORE_CASE)
         private val TRIM = charArrayOf(' ', '·', '-', '–', ',', '•')
+
+        /** Apps de Bluetooth/radio de la pantalla: su aviso dice a qué teléfono está conectada. */
+        @Volatile var watch: Set<String> = emptySet()
+            set(v) {
+                field = v
+                inst?.let { l -> try { l.activeNotifications?.forEach { l.handle(it) } } catch (e: Exception) { } }
+            }
+        @Volatile private var inst: CarNotificationListener? = null
     }
 
     override fun onListenerConnected() {
+        inst = this
         try { activeNotifications?.forEach { handle(it) } } catch (e: Exception) { }
         try { MediaHub.get(applicationContext).refresh() } catch (e: Exception) { }
     }
@@ -31,11 +40,23 @@ class CarNotificationListener : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         if (sbn.packageName == LiveNav.pkg) LiveNav.set(null, null, null)
+        if (sbn.packageName in watch) BtHub.get(applicationContext).appStatus(sbn.packageName, null)
     }
 
-    override fun onListenerDisconnected() { LiveNav.set(null, null, null) }
+    override fun onListenerDisconnected() {
+        inst = null
+        LiveNav.set(null, null, null)
+    }
 
     private fun handle(sbn: StatusBarNotification) {
+        if (sbn.packageName in watch) {
+            val ex = sbn.notification.extras
+            val t = listOfNotNull(
+                ex.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim(),
+                ex.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim(),
+            ).filter { it.isNotEmpty() }.joinToString(" · ")
+            if (t.isNotEmpty()) BtHub.get(applicationContext).appStatus(sbn.packageName, t)
+        }
         if (sbn.packageName !in NAV_PKGS) return
         val n = sbn.notification
         if (n.flags and Notification.FLAG_ONGOING_EVENT == 0) return

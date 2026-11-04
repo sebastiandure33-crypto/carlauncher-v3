@@ -197,8 +197,13 @@ class MediaHub private constructor(private val ctx: Context) {
 
     /* ------------------------------------------------------------ botones */
 
-    fun command(cmd: String, pkg: String?, pos: Long?) {
+    /** Por dónde salió el último botón (se ve en el diagnóstico). */
+    @Volatile var lastRoute: String = "—"
+        private set
+
+    fun command(cmd: String, pkg: String?, pos: Long?, forceMode: Int? = null) {
         val c = forPkg(pkg)
+        val mode = forceMode ?: this.mode
         if (cmd == "seek") {
             try { c?.transportControls?.seekTo(pos ?: 0L) } catch (e: Exception) { }
             return
@@ -212,14 +217,15 @@ class MediaHub private constructor(private val ctx: Context) {
         try {
             when (mode) {
                 0 -> when {
-                    c != null && (c.playbackState?.actions ?: 0L) != 0L -> transport(c, cmd)
+                    c != null && (c.playbackState?.actions ?: 0L) != 0L -> { transport(c, cmd); lastRoute = "sesión de ${label(c.packageName)} (automático)" }
                     c == null && target != null -> appKey(code, target)
                     else -> systemKey(code)
                 }
-                1 -> if (c != null) transport(c, cmd) else systemKey(code)
+                1 -> if (c != null) { transport(c, cmd); lastRoute = "sesión de ${label(c.packageName)} · comando" } else systemKey(code)
                 2 -> if (c != null) {
                     c.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
                     c.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+                    lastRoute = "sesión de ${label(c.packageName)} · tecla"
                 } else systemKey(code)
                 3 -> systemKey(code)
                 4 -> if (target != null) appKey(code, target) else systemKey(code)
@@ -233,6 +239,7 @@ class MediaHub private constructor(private val ctx: Context) {
                                 else transport(s, cmd)
                             } catch (e: Exception) { }
                         }
+                        lastRoute = "${all.size} sesiones de ${label(target!!)}"
                     }
                 }
                 else -> systemKey(code)
@@ -257,6 +264,7 @@ class MediaHub private constructor(private val ctx: Context) {
     private fun systemKey(code: Int) {
         am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
         am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+        lastRoute = "tecla del sistema"
     }
 
     private fun appKey(code: Int, pkg: String) {
@@ -266,5 +274,36 @@ class MediaHub private constructor(private val ctx: Context) {
                     .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(action, code)),
             )
         }
+        lastRoute = "directo a ${label(pkg)}"
+    }
+
+    private val modeNames = listOf("Automático", "Sesión · comando", "Sesión · tecla", "Tecla del sistema", "Directo a la app", "Todas las sesiones")
+
+    fun diagnostics(): List<String> {
+        val out = ArrayList<String>()
+        out += "Permiso de música: " + if (hasPermission()) "sí" else "NO (activalo en Acceso a notificaciones)"
+        val list = sessions()
+        out += "Apps con sesión de música: ${list.size}"
+        list.forEach { c ->
+            val ps = c.playbackState
+            val st = when (ps?.state) {
+                PlaybackState.STATE_PLAYING -> "sonando"
+                PlaybackState.STATE_PAUSED -> "en pausa"
+                PlaybackState.STATE_STOPPED -> "detenida"
+                PlaybackState.STATE_NONE, null -> "sin estado"
+                else -> "estado ${ps.state}"
+            }
+            val acts = ps?.actions ?: 0L
+            val can = buildList {
+                if (acts and PlaybackState.ACTION_PLAY_PAUSE != 0L || acts and PlaybackState.ACTION_PLAY != 0L) add("play")
+                if (acts and PlaybackState.ACTION_PAUSE != 0L) add("pausa")
+                if (acts and PlaybackState.ACTION_SKIP_TO_NEXT != 0L) add("siguiente")
+                if (acts and PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L) add("anterior")
+            }
+            val title = c.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.take(30) ?: "sin título"
+            out += "· ${label(c.packageName)} (${c.packageName}) — $st — acepta: ${can.joinToString().ifEmpty { "nada" }} — \"$title\""
+        }
+        out += "Modo de botones: ${mode + 1}. ${modeNames.getOrElse(mode) { "?" }} · último botón por: $lastRoute"
+        return out
     }
 }
