@@ -73,6 +73,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Motor gráfico clásico (Skia/OpenGL): más compatible con las GPU de las radios -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
 
     <queries>

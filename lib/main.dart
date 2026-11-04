@@ -10,7 +10,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-  await App.i.init();
+  debugPrint('CL4 arranque');
+  try {
+    await App.i.init().timeout(const Duration(seconds: 12));
+  } catch (e, st) {
+    debugPrint('CL4 init: $e\n$st');
+  }
+  debugPrint('CL4 init listo');
   runApp(const CarLauncherApp());
 }
 

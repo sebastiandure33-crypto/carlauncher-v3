@@ -127,6 +127,7 @@ echo "PID=$PID" | tee -a $RES
 adb logcat -d > $OUT/logcat_completo.txt
 grep -E "FATAL EXCEPTION" -A40 $OUT/logcat_completo.txt > $OUT/errores.txt || true
 grep -E " E flutter|E/flutter|Another exception|══╡ EXCEPTION" -A12 $OUT/logcat_completo.txt > $OUT/errores_flutter.txt || true
+grep -E "CL4|I flutter|E flutter" $OUT/logcat_completo.txt | head -40 | tee -a $RES
 log "Errores de Flutter: $(grep -c 'EXCEPTION\|E flutter\|E/flutter' $OUT/errores_flutter.txt)"
 rm -f $OUT/ui.xml
 if [ -z "$PID" ] || [ -s $OUT/errores.txt ]; then log "LA APP SE CERRÓ"; exit 1; fi

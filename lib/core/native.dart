@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class AppEntry {
@@ -14,10 +15,14 @@ class Native {
   static const mediaEvents = EventChannel('cl4/media');
   static const btEvents = EventChannel('cl4/bt');
 
+  /// Nunca deja la pantalla esperando: si Android no contesta a tiempo devuelve null.
   static Future<T?> _call<T>(String method, [Map<String, Object?>? args]) async {
+    final slow = method == 'apps' || method == 'appIcon' || method == 'mediaArt' || method == 'requestLocation';
     try {
-      return await _m.invokeMethod<T>(method, args);
-    } catch (_) {
+      final f = _m.invokeMethod<T>(method, args);
+      return slow && method == 'requestLocation' ? await f : await f.timeout(Duration(seconds: slow ? 20 : 4));
+    } catch (e) {
+      debugPrint('CL4 native $method: $e');
       return null;
     }
   }
