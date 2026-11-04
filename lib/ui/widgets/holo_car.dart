@@ -418,18 +418,21 @@ class _FxPainter extends CustomPainter {
     canvas.save();
     _toCar(canvas, size);
 
-    // barrido suave permanente
+    // barrido suave permanente (solo dentro del auto)
     if (intro >= 1) {
       final y = -60 + (t * 1.25 % 1.25) * 520;
+      canvas.save();
+      canvas.clipPath(_body());
       canvas.drawRect(
         Rect.fromLTWH(0, y, 200, 40),
         Paint()
           ..shader = LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [alpha(holo, 0), alpha(holo, 0.10), alpha(holo, 0)],
+            colors: [alpha(holo, 0), alpha(holo, 0.16), alpha(holo, 0)],
           ).createShader(Rect.fromLTWH(0, y, 200, 40)),
       );
+      canvas.restore();
     }
 
     // barrido de la animación de arranque

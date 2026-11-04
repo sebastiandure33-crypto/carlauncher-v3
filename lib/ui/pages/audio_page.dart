@@ -557,7 +557,7 @@ class _RadioView extends StatelessWidget {
           const SizedBox(width: 30),
           Column(children: [
             Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-              Text(f == null ? '--.-' : f.toStringAsFixed(1), style: ts(84, w: FontWeight.w400, c: c.text, ls: -3, h: 1)),
+              Text(f == null ? 'FM' : f.toStringAsFixed(1), style: ts(84, w: FontWeight.w400, c: f == null ? c.muted : c.text, ls: f == null ? 0 : -3, h: 1)),
               const SizedBox(width: 6),
               Text('MHz', style: ts(22, w: FontWeight.w600, c: c.muted)),
             ]),

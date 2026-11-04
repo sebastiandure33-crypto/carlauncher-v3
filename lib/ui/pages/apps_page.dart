@@ -375,7 +375,7 @@ class _AppsPageState extends State<AppsPage> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-              Text(s.label.toUpperCase(), style: ts(11, w: FontWeight.w700, c: c.muted, ls: 0.8)),
+              Text(s.label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: ts(10, w: FontWeight.w700, c: c.muted, ls: 0.4)),
               Text(pkg == null ? 'Elegir' : App.i.labelOf(pkg), maxLines: 1, overflow: TextOverflow.ellipsis, style: ts(14, w: FontWeight.w700, c: c.text)),
             ]),
           ),

@@ -134,11 +134,7 @@ class MainActivity : FlutterActivity() {
             "volumeStep" -> {
                 val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 val dir = if ((a["dir"] as Number).toInt() > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
-                try {
-                    am.adjustSuggestedStreamVolume(dir, AudioManager.USE_DEFAULT_STREAM_TYPE, AudioManager.FLAG_SHOW_UI)
-                } catch (e: Exception) {
-                    try { am.adjustStreamVolume(AudioManager.STREAM_MUSIC, dir, AudioManager.FLAG_SHOW_UI) } catch (e2: Exception) { }
-                }
+                try { am.adjustStreamVolume(AudioManager.STREAM_MUSIC, dir, AudioManager.FLAG_SHOW_UI) } catch (e: Exception) { }
                 main.postDelayed({
                     res.success(mapOf("cur" to am.getStreamVolume(AudioManager.STREAM_MUSIC), "max" to am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)))
                 }, 150)

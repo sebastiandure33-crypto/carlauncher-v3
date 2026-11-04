@@ -27,9 +27,9 @@ for m in re.finditer(r'<node [^>]*?>',s):
         x1,y1,x2,y2=map(int,b.groups()); print((x1+x2)//2,(y1+y2)//2); break
 PY
 )
-  if [ -n "$B" ]; then adb shell input tap $B; echo "toque '$1' en $B";
-  elif [ -n "$2" ]; then adb shell input tap $2 $3; echo "toque '$1' por coordenadas $2 $3";
-  else echo "NO ENCONTRADO: '$1'"; fi
+  if [ -n "$B" ]; then adb shell input tap $B; echo "toque '$1' en $B" >> $OUT/toques.txt;
+  elif [ -n "$2" ] && [ "$2" != 0 ]; then adb shell input tap $2 $3; echo "toque '$1' por coordenadas $2 $3" >> $OUT/toques.txt;
+  else echo "NO ENCONTRADO: '$1'" >> $OUT/toques.txt; fi
 }
 bright() { adb shell settings get system screen_brightness | tr -d '\r'; }
 vol() { adb shell media volume --stream 3 --get 2>/dev/null | grep -o 'volume is [0-9]*' | grep -o '[0-9]*$'; }
@@ -94,7 +94,8 @@ tapd "=Mapa" 42 162;           shot 10_mapa 8
 tapd "dónde vamos" 330 42;     sleep 1
 adb shell input text "Palacio%sde%sLopez"
 shot 11_mapa_busqueda 8
-tapd "Palacio de L" 330 120;   shot 12_mapa_ruta 10
+adb shell input keyevent KEYCODE_BACK; sleep 1
+adb shell input tap 330 128;   shot 12_mapa_ruta 10
 shot 13_mapa_ruta_siguiendo 8
 adb shell input keyevent KEYCODE_BACK
 tapd "=Inicio" 42 96;          shot 14_inicio_con_ruta 4

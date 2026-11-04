@@ -128,18 +128,19 @@ class _MaintPageState extends State<MaintPage> {
                     },
                   ),
                 ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: TweenAnimationBuilder<Rect?>(
-                      tween: RectTween(end: _link),
-                      duration: const Duration(milliseconds: 700),
-                      curve: Curves.easeInOutCubic,
-                      builder: (_, r, __) => CustomPaint(
-                        painter: _LinkPainter(r, warnParts.contains(Maint.partOf(_sel)) ? c.red : c.accent),
+                if (_link != null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: TweenAnimationBuilder<Rect?>(
+                        tween: RectTween(begin: _link, end: _link),
+                        duration: const Duration(milliseconds: 700),
+                        curve: Curves.easeInOutCubic,
+                        builder: (_, r, __) => CustomPaint(
+                          painter: _LinkPainter(r, warnParts.contains(Maint.partOf(_sel)) ? c.red : c.accent),
+                        ),
                       ),
                     ),
                   ),
-                ),
                 Positioned(left: 0, top: 0, bottom: 0, width: _side, child: _column(c, km.take(half).toList())),
                 Positioned(right: 0, top: 0, bottom: 0, width: _side, child: _column(c, km.skip(half).toList())),
               ]),
@@ -386,9 +387,17 @@ class _KmCard extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
               Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: ts(14, w: FontWeight.w700, c: c.text2)),
-              Text(r.remaining == null ? 'Sin cargar' : '${miles(r.remaining!)} km',
+              Text(
+                  r.remaining != null
+                      ? '${miles(r.remaining!)} km'
+                      : r.next != null
+                          ? 'a los ${miles(r.next!)}'
+                          : 'Sin cargar',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: ts(22, w: FontWeight.w700, c: r.warn ? c.redText : c.text, ls: -0.4)),
-              Text('cada ${miles(r.interval)} km', style: ts(12, c: c.muted)),
+              Text(r.remaining == null && r.next != null ? 'cargá el tablero para ver cuánto falta' : 'cada ${miles(r.interval)} km',
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: ts(12, c: c.muted)),
             ]),
           ),
           AnimatedOpacity(
