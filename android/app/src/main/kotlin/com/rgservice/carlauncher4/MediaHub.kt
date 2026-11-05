@@ -260,9 +260,35 @@ class MediaHub private constructor(private val ctx: Context) {
     @Volatile var lastRoute: String = "—"
         private set
 
+    /* ---------------------------------------------- órdenes propias de la app (elegidas en el diagnóstico) */
+
+    private fun actKey(pkg: String, cmd: String) = "act_${pkg}_" + (if (cmd == "play" || cmd == "pause") "toggle" else cmd)
+
+    fun customAction(pkg: String?, cmd: String): String? =
+        if (pkg == null) null else sp.getString(actKey(pkg, cmd), null)?.takeIf { it.isNotBlank() }
+
+    fun setCustomAction(pkg: String, cmd: String, action: String?) {
+        if (action == null) sp.edit().remove(actKey(pkg, cmd)).apply() else sp.edit().putString(actKey(pkg, cmd), action).apply()
+    }
+
+    fun customActions(pkg: String): Map<String, String?> =
+        mapOf("toggle" to customAction(pkg, "toggle"), "next" to customAction(pkg, "next"), "prev" to customAction(pkg, "prev"))
+
+    /** Manda una orden como aviso general (la reciben los receptores que la app registró al abrirse). */
+    fun sendAction(action: String, pkg: String?) {
+        try { ctx.sendBroadcast(Intent(action)) } catch (e: Exception) { }
+        lastRoute = "orden $action" + (pkg?.let { " (${label(it)})" } ?: "")
+    }
+
     fun command(cmd: String, pkg: String?, pos: Long?, forceMode: Int? = null) {
         val c = forPkg(pkg)
         val mode = forceMode ?: this.mode
+        val custom = customAction(pkg ?: btApp, cmd)
+        if (cmd != "seek" && custom != null && (mode == 0 || mode == 7)) {
+            sendAction(custom, pkg ?: btApp)
+            h.postDelayed({ push() }, 400)
+            return
+        }
         if (cmd == "seek") {
             try { c?.transportControls?.seekTo(pos ?: 0L) } catch (e: Exception) { }
             return
@@ -302,6 +328,7 @@ class MediaHub private constructor(private val ctx: Context) {
                     }
                 }
                 6 -> musicCommand(cmd, target)
+                7 -> systemKey(code) // sin órdenes elegidas para esta app
                 else -> systemKey(code)
             }
         } catch (e: Exception) {
@@ -337,7 +364,7 @@ class MediaHub private constructor(private val ctx: Context) {
         lastRoute = "directo a ${label(pkg)}"
     }
 
-    private val modeNames = listOf("Automático", "Sesión · comando", "Sesión · tecla", "Tecla del sistema", "Directo a la app", "Todas las sesiones", "Orden de música clásica")
+    private val modeNames = listOf("Automático", "Sesión · comando", "Sesión · tecla", "Tecla del sistema", "Directo a la app", "Todas las sesiones", "Orden de música clásica", "Órdenes elegidas de la app")
 
     /** La orden "musicservicecommand" que escuchan muchas apps de música de radios chinas. */
     private fun musicCommand(cmd: String, pkg: String?) {

@@ -404,10 +404,146 @@ class _DiagPageState extends State<DiagPage> {
                       ]),
                     ),
                     if (_result.isNotEmpty) Text(_result, style: ts(13, w: FontWeight.w600, c: c.text2)),
+                    const SizedBox(height: 8),
+                    Pill(
+                      text: 'Buscar órdenes en la app ${_target.label}',
+                      icon: Icons.manage_search_rounded,
+                      primary: true,
+                      expand: true,
+                      onTap: () {
+                        final pkg = App.i.settings.slot(_target);
+                        if (pkg == null) {
+                          toast(context, 'Primero elegí la app de ${_target.label}');
+                          return;
+                        }
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProbePage(pkg: pkg, title: _target.label)));
+                      },
+                    ),
                   ]),
                 ),
               ),
             ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Lista las órdenes que aparecen dentro del código de la app del fabricante.
+/// Con música sonando se prueba cada una; la que funciona se asigna a ▶, ⏭ o ⏮.
+class ProbePage extends StatefulWidget {
+  const ProbePage({super.key, required this.pkg, required this.title});
+  final String pkg, title;
+  @override
+  State<ProbePage> createState() => _ProbePageState();
+}
+
+class _ProbePageState extends State<ProbePage> {
+  List<String>? _list;
+  Map<String, String?> _chosen = const {};
+  String? _last;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final l = await Native.probe(widget.pkg);
+    final ch = await Native.customActions(widget.pkg);
+    if (mounted) setState(() {
+      _list = l;
+      _chosen = ch;
+    });
+  }
+
+  Future<void> _assign(String cmd, String a) async {
+    final already = _chosen[cmd] == a;
+    await Native.setCustomAction(widget.pkg, cmd, already ? null : a);
+    if (!already) App.i.settings.mediaMode = 7;
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.pal;
+    final list = _list;
+    String label(String cmd) => switch (cmd) { 'toggle' => '▶ Play/pausa', 'next' => '⏭ Siguiente', _ => '⏮ Anterior' };
+    return Scaffold(
+      backgroundColor: c.ground,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            RoundBtn(icon: Icons.arrow_back_rounded, label: 'Volver', size: 50, onTap: () => Navigator.pop(context)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Órdenes de ${widget.title}', style: ts(24, w: FontWeight.w700, c: c.text)),
+                Text('${widget.pkg} · poné música, tocá "Probar" en cada una y asigná la que funcione',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: ts(13, c: c.muted)),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, children: [
+            for (final cmd in const ['toggle', 'next', 'prev'])
+              Chip(
+                backgroundColor: c.chip,
+                side: BorderSide(color: c.line),
+                label: Text('${label(cmd)}: ${_chosen[cmd] ?? 'sin elegir'}', style: ts(12, w: FontWeight.w600, c: _chosen[cmd] == null ? c.muted : c.accent)),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Glass(
+              color: c.panelSolid,
+              padding: const EdgeInsets.all(8),
+              child: list == null
+                  ? Center(child: Text('Buscando dentro de la app…', style: ts(16, c: c.text2)))
+                  : list.isEmpty
+                      ? Center(child: Text('No se encontraron órdenes en esta app', style: ts(16, c: c.text2)))
+                      : ListView.separated(
+                          itemCount: list.length,
+                          separatorBuilder: (_, __) => Divider(height: 1, color: c.line),
+                          itemBuilder: (_, i) {
+                            final a = list[i];
+                            final used = _chosen.entries.where((e) => e.value == a).map((e) => e.key).toList();
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                              child: Row(children: [
+                                Expanded(
+                                  child: Text(a,
+                                      style: ts(14, w: used.isEmpty ? FontWeight.w500 : FontWeight.w700, c: used.isEmpty ? (a == _last ? c.accent : c.text) : c.green)),
+                                ),
+                                Pill(
+                                  text: 'Probar',
+                                  height: 40,
+                                  onTap: () {
+                                    Native.sendAction(a, widget.pkg);
+                                    setState(() => _last = a);
+                                  },
+                                ),
+                                const SizedBox(width: 6),
+                                for (final cmd in const ['toggle', 'next', 'prev']) ...[
+                                  RoundBtn(
+                                    icon: switch (cmd) { 'toggle' => Icons.play_arrow_rounded, 'next' => Icons.skip_next_rounded, _ => Icons.skip_previous_rounded },
+                                    label: 'Usar para ${label(cmd)}',
+                                    size: 40,
+                                    bg: used.contains(cmd) ? c.accent : c.chip,
+                                    fg: used.contains(cmd) ? c.onAccent : c.text,
+                                    onTap: () => _assign(cmd, a),
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                              ]),
+                            );
+                          },
+                        ),
+            ),
           ),
         ]),
       ),

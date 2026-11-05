@@ -144,6 +144,16 @@ class MainActivity : FlutterActivity() {
             )
             "setBrightness" -> res.success(setBrightness((a["v"] as Number).toInt().coerceIn(5, 255)))
             "launchReturn" -> res.success(launchReturn(a["pkg"] as String?, (a["delay"] as? Number)?.toLong() ?: 2000L))
+            "probe" -> {
+                val pkg = a["pkg"] as String
+                bg(res) { DexProbe.candidates(this, pkg) }
+            }
+            "sendAction" -> { media.sendAction(a["action"] as String, a["pkg"] as String?); res.success(null) }
+            "customActions" -> res.success(media.customActions(a["pkg"] as String))
+            "setCustomAction" -> {
+                media.setCustomAction(a["pkg"] as String, a["cmd"] as String, a["action"] as String?)
+                res.success(null)
+            }
             "diag" -> {
                 @Suppress("UNCHECKED_CAST")
                 val pkgs = (a["pkgs"] as? List<String>) ?: emptyList()

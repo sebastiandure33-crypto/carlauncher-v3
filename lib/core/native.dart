@@ -17,7 +17,7 @@ class Native {
 
   /// Nunca deja la pantalla esperando: si Android no contesta a tiempo devuelve null.
   static Future<T?> _call<T>(String method, [Map<String, Object?>? args]) async {
-    final slow = method == 'diag' || method == 'apps' || method == 'appIcon' || method == 'mediaArt' || method == 'requestLocation';
+    final slow = method == 'probe' || method == 'diag' || method == 'apps' || method == 'appIcon' || method == 'mediaArt' || method == 'requestLocation';
     try {
       final f = _m.invokeMethod<T>(method, args);
       return slow && method == 'requestLocation' ? await f : await f.timeout(Duration(seconds: slow ? 20 : 4));
@@ -95,6 +95,18 @@ class Native {
   /// Prueba un botón de música con un modo puntual. Devuelve por dónde salió.
   static Future<String> mediaTest(String cmd, int mode, String? pkg) async =>
       (await _call<String>('mediaTest', {'cmd': cmd, 'mode': mode, 'pkg': pkg})) ?? '—';
+
+  /// Textos del código de la app que parecen órdenes (para probarlas una por una).
+  static Future<List<String>> probe(String pkg) async =>
+      [for (final e in (await _call<List<Object?>>('probe', {'pkg': pkg})) ?? const []) '$e'];
+  static Future<void> sendAction(String action, String? pkg) => _call('sendAction', {'action': action, 'pkg': pkg});
+  static Future<Map<String, String?>> customActions(String pkg) async {
+    final r = await _call<Map<Object?, Object?>>('customActions', {'pkg': pkg}) ?? const {};
+    return {for (final e in r.entries) '${e.key}': e.value as String?};
+  }
+
+  static Future<void> setCustomAction(String pkg, String cmd, String? action) =>
+      _call('setCustomAction', {'pkg': pkg, 'cmd': cmd, 'action': action});
 
   /// Apps cuyo aviso se lee (para saber a qué teléfono se conectó la radio).
   static Future<void> watch(List<String> pkgs, {String? music}) => _call('watch', {'pkgs': pkgs, 'music': music});
