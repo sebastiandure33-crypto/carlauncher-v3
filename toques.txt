@@ -1,0 +1,30 @@
+toque 'Modo ' en 42 510
+toque 'Modo ' en 42 510
+toque 'Modo ' en 42 510
+toque 'Modo Noche' por coordenadas 42 510
+toque '=Apps' por coordenadas 42 426
+toque 'Modo ' en 42 510
+toque 'Modo ' en 42 510
+toque 'Modo ' en 42 510
+toque '=Audio' por coordenadas 42 228
+toque 'Subir volumen' en 901 44
+toque '=Radio FM' en 258 44
+toque 'Reproducir' en 450 533
+toque '=Mapa' por coordenadas 42 162
+toque 'dónde vamos' por coordenadas 330 42
+toque '=Inicio' por coordenadas 42 96
+toque '=Auto' por coordenadas 42 360
+toque 'Rotación de neumáticos' en 882 152
+toque 'Pastillas de freno' en 882 296
+toque 'Pastillas de freno' en 882 296
+toque 'Próximo cambio' en 673 233
+toque '=2' en 654 134
+toque '=5' en 654 202
+toque '=0' en 654 338
+toque '=0' en 654 338
+toque '=0' en 654 338
+toque '=Guardar' en 369 228
+NO ENCONTRADO: 'Cerrar'
+toque '=Apps' por coordenadas 42 426
+toque '=Ajustes' en 964 60
+toque 'Revisar música' en 512 411

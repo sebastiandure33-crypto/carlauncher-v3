@@ -1,0 +1,7 @@
+Starting: Intent { cmp=com.rgservice.carlauncher4/.MainActivity }
+Status: ok
+LaunchState: WARM
+Activity: com.rgservice.carlauncher4/.MainActivity
+TotalTime: 3574
+WaitTime: 3575
+Complete

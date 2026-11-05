@@ -1,0 +1,10 @@
+Modo actual: Modo Noche
+Brillo del sistema: antes 115 -> después 204  OK
+Volumen música: antes 5 -> después 3  OK
+Brillo al pasar de modo: 204 -> 255  OK
+Botón subir volumen: 3 -> 4  OK
+PID=3425
+11-05 18:46:32.285  3425  3480 I flutter : CL4 arranque
+11-05 18:46:32.446  3425  3480 I flutter : CL4 init listo
+Errores de Flutter: 0
+OK: recorrió todas las pantallas y sigue abierta
