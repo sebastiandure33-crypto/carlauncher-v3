@@ -296,8 +296,11 @@ class _DiagPageState extends State<DiagPage> {
   }
 
   Future<void> _refresh() async {
-    final l = await Native.diag();
     final s = App.i.settings;
+    final l = await Native.diag([
+      for (final sl in const [Slot.music, Slot.radio])
+        if (s.slot(sl) != null) s.slot(sl)!,
+    ]);
     final extra = [
       '— Apps elegidas —',
       for (final sl in Slot.values) '${sl.label}: ${s.slot(sl) ?? 'sin elegir'}${s.slotIsAuto(sl) ? ' (detectada)' : ''}',

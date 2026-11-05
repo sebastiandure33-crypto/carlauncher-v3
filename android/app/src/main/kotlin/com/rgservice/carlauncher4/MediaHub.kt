@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.media.browse.MediaBrowser
 import android.media.session.MediaController
 import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
@@ -58,6 +59,52 @@ class MediaHub private constructor(private val ctx: Context) {
 
     init { h.post(loop) }
 
+    /* ---------------------------------------------- Bluetooth del sistema (AVRCP) */
+
+    /** App Bluetooth elegida en el launcher (ej. com.tw.bt): sus botones se mandan por AVRCP si existe. */
+    @Volatile var btApp: String? = null
+    @Volatile private var btCtrl: MediaController? = null
+    private var btBrowser: MediaBrowser? = null
+    private var btTried = 0L
+    private var btState = "sin probar"
+
+    /** Servicio con el que Android controla la música del teléfono cuando la radio es receptora. */
+    private val btServices = listOf(
+        ComponentName("com.android.bluetooth", "com.android.bluetooth.avrcpcontroller.BluetoothMediaBrowserService"),
+        ComponentName("com.android.bluetooth", "com.android.bluetooth.a2dpsink.mbs.A2dpMediaBrowserService"),
+    )
+
+    private fun exists(c: ComponentName) = try { ctx.packageManager.getServiceInfo(c, 0); true } catch (e: Exception) { false }
+
+    private fun connectBt() {
+        if (btBrowser != null || System.currentTimeMillis() - btTried < 30_000L) return
+        btTried = System.currentTimeMillis()
+        val comp = btServices.firstOrNull { exists(it) }
+        if (comp == null) { btState = "no existe en esta radio"; return }
+        var b: MediaBrowser? = null
+        b = MediaBrowser(ctx, comp, object : MediaBrowser.ConnectionCallback() {
+            override fun onConnected() {
+                try {
+                    val c = MediaController(ctx, b!!.sessionToken)
+                    c.registerCallback(object : MediaController.Callback() {
+                        override fun onPlaybackStateChanged(state: PlaybackState?) { push() }
+                        override fun onMetadataChanged(metadata: MediaMetadata?) { push() }
+                        override fun onSessionDestroyed() { btCtrl = null; btBrowser = null; push() }
+                    }, h)
+                    btCtrl = c
+                    btState = "conectado (${comp.className.substringAfterLast('.')})"
+                } catch (e: Exception) { btState = "error: ${e.message}" }
+                push()
+            }
+            override fun onConnectionFailed() { btBrowser = null; btCtrl = null; btState = "no acepta la conexión" }
+            override fun onConnectionSuspended() { btBrowser = null; btCtrl = null; btState = "desconectado"; push() }
+        }, null)
+        btBrowser = b
+        try { b!!.connect() } catch (e: Exception) { btBrowser = null; btState = "error: ${e.message}" }
+    }
+
+    private fun btAlias(pkg: String?) = btCtrl != null && pkg != null && (pkg == btApp || pkg == "com.android.bluetooth")
+
     var mode: Int
         get() = sp.getInt("mediaMode", 0)
         set(v) { sp.edit().putInt("mediaMode", v).apply() }
@@ -70,6 +117,7 @@ class MediaHub private constructor(private val ctx: Context) {
     fun refresh() { h.post { tick() } }
 
     private fun tick() {
+        connectBt()
         if (!registered && hasPermission()) {
             try {
                 msm.addOnActiveSessionsChangedListener(changed, listener, h)
@@ -120,7 +168,8 @@ class MediaHub private constructor(private val ctx: Context) {
 
     /** La sesión de una app (la que suena, si tiene varias). */
     private fun forPkg(pkg: String?): MediaController? {
-        if (pkg == null) return current()
+        if (btAlias(pkg)) return btCtrl
+        if (pkg == null) return btCtrl?.takeIf { playing(it) } ?: current()
         val list = controllers().filter { it.packageName == pkg }
         return list.firstOrNull { playing(it) } ?: list.firstOrNull()
     }
@@ -130,13 +179,23 @@ class MediaHub private constructor(private val ctx: Context) {
         if (cur != null && playing(cur)) lastPkg = cur.packageName
         val seen = HashSet<String>()
         val out = ArrayList<Map<String, Any?>>()
+        var currentPkg = cur?.packageName
+        // la música del teléfono por AVRCP reemplaza a las sesiones vacías de la app Bluetooth
+        val bt = btCtrl
+        if (bt != null) {
+            val alias = btApp ?: "com.android.bluetooth"
+            out.add(describe(bt) + mapOf("pkg" to alias, "label" to "Bluetooth"))
+            seen.add(alias)
+            seen.add(bt.packageName)
+            if (playing(bt) || cur == null || cur.packageName == alias) currentPkg = alias
+        }
         // una entrada por app (la que suena primero)
         val list = controllers().sortedByDescending { if (playing(it)) 1 else 0 }
         for (c in list) {
             if (!seen.add(c.packageName)) continue
             out.add(describe(c))
         }
-        live.set(mapOf("perm" to true, "sessions" to out, "current" to cur?.packageName))
+        live.set(mapOf("perm" to true, "sessions" to out, "current" to currentPkg))
     }
 
     private fun describe(c: MediaController): Map<String, Any?> {
@@ -242,6 +301,7 @@ class MediaHub private constructor(private val ctx: Context) {
                         lastRoute = "${all.size} sesiones de ${label(target!!)}"
                     }
                 }
+                6 -> musicCommand(cmd, target)
                 else -> systemKey(code)
             }
         } catch (e: Exception) {
@@ -277,14 +337,40 @@ class MediaHub private constructor(private val ctx: Context) {
         lastRoute = "directo a ${label(pkg)}"
     }
 
-    private val modeNames = listOf("Automático", "Sesión · comando", "Sesión · tecla", "Tecla del sistema", "Directo a la app", "Todas las sesiones")
+    private val modeNames = listOf("Automático", "Sesión · comando", "Sesión · tecla", "Tecla del sistema", "Directo a la app", "Todas las sesiones", "Orden de música clásica")
+
+    /** La orden "musicservicecommand" que escuchan muchas apps de música de radios chinas. */
+    private fun musicCommand(cmd: String, pkg: String?) {
+        val c = when (cmd) { "next" -> "next"; "prev" -> "previous"; "play" -> "play"; "pause" -> "pause"; else -> "togglepause" }
+        val intents = listOf(
+            Intent("com.android.music.musicservicecommand").putExtra("command", c),
+            Intent("com.android.music.musicservicecommand.$c"),
+        )
+        for (i in intents) {
+            try { ctx.sendBroadcast(Intent(i)) } catch (e: Exception) { }
+            if (pkg != null) try { ctx.sendBroadcast(Intent(i).setPackage(pkg)) } catch (e: Exception) { }
+        }
+        lastRoute = "orden de música clásica ($c)" + (pkg?.let { " a ${label(it)}" } ?: "")
+    }
 
     fun diagnostics(): List<String> {
         val out = ArrayList<String>()
         out += "Permiso de música: " + if (hasPermission()) "sí" else "NO (activalo en Acceso a notificaciones)"
         val list = sessions()
-        out += "Apps con sesión de música: ${list.size}"
-        list.forEach { c ->
+        out += "Bluetooth del sistema (AVRCP): $btState"
+        btCtrl?.let { c ->
+            val t = c.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "sin título"
+            out += "· AVRCP: ${if (playing(c)) "sonando" else "en pausa"} — \"$t\""
+        }
+        out += "Sesiones de música: ${list.size}"
+        val byPkg = list.groupBy { it.packageName }
+        byPkg.forEach { (pkg, group) ->
+            if (group.size <= 2) return@forEach
+            val sonando = group.count { playing(it) }
+            val sinBotones = group.count { (it.playbackState?.actions ?: 0L) == 0L }
+            out += "· ${label(pkg)} ($pkg): ${group.size} sesiones, $sonando sonando, $sinBotones no aceptan botones"
+        }
+        list.filter { (byPkg[it.packageName]?.size ?: 0) <= 2 }.forEach { c ->
             val ps = c.playbackState
             val st = when (ps?.state) {
                 PlaybackState.STATE_PLAYING -> "sonando"

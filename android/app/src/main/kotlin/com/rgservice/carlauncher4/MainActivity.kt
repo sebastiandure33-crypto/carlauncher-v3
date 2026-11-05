@@ -144,7 +144,11 @@ class MainActivity : FlutterActivity() {
             )
             "setBrightness" -> res.success(setBrightness((a["v"] as Number).toInt().coerceIn(5, 255)))
             "launchReturn" -> res.success(launchReturn(a["pkg"] as String?, (a["delay"] as? Number)?.toLong() ?: 2000L))
-            "diag" -> res.success(diagnostics())
+            "diag" -> {
+                @Suppress("UNCHECKED_CAST")
+                val pkgs = (a["pkgs"] as? List<String>) ?: emptyList()
+                bg(res) { diagnostics(pkgs) }
+            }
             "mediaTest" -> {
                 media.command(a["cmd"] as String, a["pkg"] as String?, null, (a["mode"] as Number).toInt())
                 res.success(media.lastRoute)
@@ -152,6 +156,7 @@ class MainActivity : FlutterActivity() {
             "watch" -> {
                 @Suppress("UNCHECKED_CAST")
                 CarNotificationListener.watch = ((a["pkgs"] as? List<String>) ?: emptyList()).toSet()
+                media.btApp = a["music"] as? String
                 res.success(null)
             }
             "btInfo" -> res.success(bt.info())
@@ -259,18 +264,15 @@ class MainActivity : FlutterActivity() {
         return true
     }
 
-    private fun diagnostics(): List<String> {
+    private fun diagnostics(pkgs: List<String>): List<String> {
         val out = ArrayList<String>()
         out += "— Música —"
         out += media.diagnostics()
+        out += "Servicios de música navegables: " + VendorProbe.browsers(this).joinToString()
         out += "— Bluetooth —"
         val b = bt.info()
-        out += "Bluetooth de Android: " + when {
-            b["available"] != true -> "no existe (la radio usa su propio Bluetooth)"
-            b["on"] != true -> "apagado"
-            b["name"] == null -> "prendido, sin teléfono conectado"
-            else -> "conectado a ${b["name"]}"
-        }
+        out += "Teléfono visto por Android: " + ((b["name"] as? String) ?: "ninguno (puede ser un módulo Bluetooth propio de la radio)")
+        out += bt.diagnostics()
         out += "Aviso de la app Bluetooth: " + ((b["appText"] as? String)?.takeIf { it.isNotBlank() } ?: "ninguno")
         out += "Apps vigiladas: " + CarNotificationListener.watch.joinToString().ifEmpty { "ninguna" }
         out += "— Volumen y brillo —"
@@ -279,6 +281,12 @@ class MainActivity : FlutterActivity() {
         out += "Permiso de brillo: " + if (Settings.System.canWrite(this)) "sí" else "NO (solo cambia esta pantalla)"
         out += "Brillo del sistema: " + try { Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) } catch (e: Exception) { "?" }
         out += "Android ${Build.VERSION.RELEASE} · ${Build.MANUFACTURER} ${Build.MODEL} · ${Build.DISPLAY}"
+        out += "— Ajustes del Bluetooth de la radio —"
+        out += VendorProbe.settings(this)
+        for (p in pkgs.distinct()) {
+            out += "— Órdenes que acepta ${media.label(p)} ($p) —"
+            out += VendorProbe.actions(this, p)
+        }
         return out
     }
 

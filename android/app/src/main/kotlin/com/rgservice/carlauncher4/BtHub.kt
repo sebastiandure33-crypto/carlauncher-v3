@@ -28,8 +28,11 @@ class BtHub private constructor(private val ctx: Context) {
     private val h = Handler(Looper.getMainLooper())
     @Suppress("DEPRECATION")
     private val adapter: BluetoothAdapter? = try { BluetoothAdapter.getDefaultAdapter() } catch (e: Exception) { null }
-    private var a2dp: BluetoothProfile? = null
-    private var hfp: BluetoothProfile? = null
+    // En una radio el teléfono "manda" el audio: la radio es A2DP_SINK (11) y HEADSET_CLIENT (16),
+    // no A2DP / HEADSET como un parlante. Se consultan los cuatro.
+    private val proxies = HashMap<Int, BluetoothProfile>()
+    private val A2DP_SINK = 11
+    private val HEADSET_CLIENT = 16
 
     private val rx = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) { schedule() }
@@ -38,16 +41,17 @@ class BtHub private constructor(private val ctx: Context) {
     init {
         val sl = object : BluetoothProfile.ServiceListener {
             override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-                if (profile == BluetoothProfile.A2DP) a2dp = proxy else hfp = proxy
+                proxies[profile] = proxy
                 schedule()
             }
             override fun onServiceDisconnected(profile: Int) {
-                if (profile == BluetoothProfile.A2DP) a2dp = null else hfp = null
+                proxies.remove(profile)
                 schedule()
             }
         }
-        try { adapter?.getProfileProxy(ctx, sl, BluetoothProfile.A2DP) } catch (e: Exception) { }
-        try { adapter?.getProfileProxy(ctx, sl, BluetoothProfile.HEADSET) } catch (e: Exception) { }
+        for (p in listOf(BluetoothProfile.A2DP, BluetoothProfile.HEADSET, A2DP_SINK, HEADSET_CLIENT)) {
+            try { adapter?.getProfileProxy(ctx, sl, p) } catch (e: Exception) { }
+        }
         try {
             ctx.registerReceiver(rx, IntentFilter().apply {
                 addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
@@ -55,6 +59,8 @@ class BtHub private constructor(private val ctx: Context) {
                 addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
                 addAction("android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED")
                 addAction("android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED")
+                addAction("android.bluetooth.a2dp-sink.profile.action.CONNECTION_STATE_CHANGED")
+                addAction("android.bluetooth.headsetclient.profile.action.CONNECTION_STATE_CHANGED")
                 addAction("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED")
             })
         } catch (e: Exception) { }
@@ -80,9 +86,9 @@ class BtHub private constructor(private val ctx: Context) {
 
     fun info(): Map<String, Any?> {
         val on = try { adapter?.isEnabled == true } catch (e: Exception) { false }
-        val audio = devices(a2dp)
-        val calls = devices(hfp)
-        val d = audio.firstOrNull() ?: calls.firstOrNull()
+        val audio = devices(proxies[BluetoothProfile.A2DP]) + devices(proxies[A2DP_SINK])
+        val calls = devices(proxies[BluetoothProfile.HEADSET]) + devices(proxies[HEADSET_CLIENT])
+        val d = audio.firstOrNull() ?: calls.firstOrNull() ?: connectedBonded().firstOrNull()
         val name = try { d?.name } catch (e: Exception) { null }
         val battery = try {
             if (d == null) -1 else (d.javaClass.getMethod("getBatteryLevel").invoke(d) as? Int) ?: -1
@@ -98,6 +104,33 @@ class BtHub private constructor(private val ctx: Context) {
             "appText" to appText,
         )
     }
+
+    /** Vinculados que Android marca como conectados (sirve aunque el perfil no se pueda consultar). */
+    private fun connectedBonded(): List<BluetoothDevice> = try {
+        (adapter?.bondedDevices ?: emptySet()).filter { d ->
+            try { d.javaClass.getMethod("isConnected").invoke(d) as? Boolean == true } catch (e: Exception) { false }
+        }
+    } catch (e: Exception) { emptyList() }
+
+    /** Texto para el diagnóstico. */
+    fun diagnostics(): List<String> {
+        val out = ArrayList<String>()
+        if (adapter == null) { out += "Android no tiene Bluetooth propio (lo maneja un módulo de la radio)"; return out }
+        out += "Bluetooth de Android: " + if (try { adapter.isEnabled } catch (e: Exception) { false }) "prendido" else "apagado"
+        val names = mapOf(BluetoothProfile.A2DP to "A2DP", BluetoothProfile.HEADSET to "Manos libres", A2DP_SINK to "A2DP receptor", HEADSET_CLIENT to "Manos libres (auto)")
+        names.forEach { (p, n) ->
+            val px = proxies[p]
+            out += "· $n: " + when {
+                px == null -> "no disponible"
+                else -> devices(px).joinToString { safeName(it) }.ifEmpty { "nada conectado" }
+            }
+        }
+        val bonded = try { adapter.bondedDevices ?: emptySet() } catch (e: Exception) { emptySet() }
+        out += "Vinculados: " + bonded.joinToString { safeName(it) + (if (connectedBonded().any { c -> c.address == it.address }) " (conectado)" else "") }.ifEmpty { "ninguno" }
+        return out
+    }
+
+    private fun safeName(d: BluetoothDevice) = try { d.name ?: d.address } catch (e: Exception) { "?" }
 
     private fun devices(p: BluetoothProfile?): List<BluetoothDevice> =
         try { p?.connectedDevices ?: emptyList() } catch (e: Exception) { emptyList() }

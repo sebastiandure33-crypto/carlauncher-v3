@@ -17,7 +17,7 @@ class Native {
 
   /// Nunca deja la pantalla esperando: si Android no contesta a tiempo devuelve null.
   static Future<T?> _call<T>(String method, [Map<String, Object?>? args]) async {
-    final slow = method == 'apps' || method == 'appIcon' || method == 'mediaArt' || method == 'requestLocation';
+    final slow = method == 'diag' || method == 'apps' || method == 'appIcon' || method == 'mediaArt' || method == 'requestLocation';
     try {
       final f = _m.invokeMethod<T>(method, args);
       return slow && method == 'requestLocation' ? await f : await f.timeout(Duration(seconds: slow ? 20 : 4));
@@ -89,14 +89,15 @@ class Native {
   static Future<bool> launchReturn(String? pkg, {int delayMs = 2000}) =>
       pkg == null ? Future.value(false) : _bool('launchReturn', {'pkg': pkg, 'delay': delayMs});
 
-  static Future<List<String>> diag() async => [for (final e in (await _call<List<Object?>>('diag')) ?? const []) '$e'];
+  static Future<List<String>> diag(List<String> pkgs) async =>
+      [for (final e in (await _call<List<Object?>>('diag', {'pkgs': pkgs})) ?? const []) '$e'];
 
   /// Prueba un botón de música con un modo puntual. Devuelve por dónde salió.
   static Future<String> mediaTest(String cmd, int mode, String? pkg) async =>
       (await _call<String>('mediaTest', {'cmd': cmd, 'mode': mode, 'pkg': pkg})) ?? '—';
 
   /// Apps cuyo aviso se lee (para saber a qué teléfono se conectó la radio).
-  static Future<void> watch(List<String> pkgs) => _call('watch', {'pkgs': pkgs});
+  static Future<void> watch(List<String> pkgs, {String? music}) => _call('watch', {'pkgs': pkgs, 'music': music});
   static Future<Map<Object?, Object?>?> btInfo() => _call<Map<Object?, Object?>>('btInfo');
   static Future<Map<Object?, Object?>?> wifiInfo() => _call<Map<Object?, Object?>>('wifiInfo');
   static Future<String?> filesDir() => _call<String>('filesDir');

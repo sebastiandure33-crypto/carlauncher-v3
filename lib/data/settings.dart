@@ -114,6 +114,7 @@ class Settings extends ChangeNotifier {
     'Tecla del sistema',
     'Directo a la app',
     'Todas las sesiones de la app',
+    'Orden de música clásica',
   ];
 
   int get mediaMode => sp.getInt('mediaMode') ?? 0;

@@ -234,7 +234,7 @@ class App {
       final p = settings.slot(s);
       if (p != null) w.add(p);
     }
-    Native.watch(w.toList());
+    Native.watch(w.toList(), music: settings.slot(Slot.music));
   }
 
   /* ------------------------------------------------ brillo por modo */
